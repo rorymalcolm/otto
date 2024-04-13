@@ -8,8 +8,8 @@ jobs:
   go-test-lint:
     strategy:
       matrix:
-        go: [1.19, 1.18]
-        golangcli: [v1.53.3]
+        go: ['1.22.1']
+        golangcli: [v1.56.2]
         os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
@@ -17,7 +17,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
           cache: true
