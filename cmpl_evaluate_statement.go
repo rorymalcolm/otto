@@ -23,16 +23,10 @@ func (rt *runtime) cmplEvaluateNodeStatement(node nodeStatement) Value {
 
 	switch node := node.(type) {
 	case *nodeBlockStatement:
-		labels := rt.labels
-		rt.labels = nil
+		return rt.cmplEvaluateNodeBlockStatement(node)
 
-		value := rt.cmplEvaluateNodeStatementList(node.list)
-		if value.kind == valueResult {
-			if value.evaluateBreak(labels) == resultBreak {
-				return emptyValue
-			}
-		}
-		return value
+	case *nodeLexicalDeclaration:
+		return rt.cmplEvaluateNodeLexicalDeclaration(node)
 
 	case *nodeBranchStatement:
 		target := node.label
@@ -168,6 +162,70 @@ resultBreak:
 	return result
 }
 
+// cmplEvaluateNodeBlockStatement evaluates a block, introducing a fresh lexical
+// environment record when the block contains let/const declarations.
+func (rt *runtime) cmplEvaluateNodeBlockStatement(node *nodeBlockStatement) Value {
+	labels := rt.labels
+	rt.labels = nil
+
+	if node.lexical {
+		restore := rt.enterLexicalScope()
+		defer restore()
+	}
+
+	value := rt.cmplEvaluateNodeStatementList(node.list)
+	if value.kind == valueResult {
+		if value.evaluateBreak(labels) == resultBreak {
+			return emptyValue
+		}
+	}
+	return value
+}
+
+// enterLexicalScope pushes a new declarative environment record as the current
+// lexical environment, returning a function that restores the previous one.
+func (rt *runtime) enterLexicalScope() func() {
+	saved := rt.scope.lexical
+	rt.scope.lexical = rt.newDeclarationStash(saved)
+	return func() {
+		rt.scope.lexical = saved
+	}
+}
+
+// cmplEvaluateNodeLexicalDeclaration creates let/const bindings in the current
+// lexical environment. There is no temporal dead zone: a binding read before
+// its declaration resolves to an outer scope rather than throwing.
+func (rt *runtime) cmplEvaluateNodeLexicalDeclaration(node *nodeLexicalDeclaration) Value {
+	for _, binding := range node.bindings {
+		value := Value{}
+		if binding.hasValue {
+			value = rt.cmplEvaluateNodeExpression(binding.initializer).resolve()
+		}
+		rt.declareLexicalBinding(binding.name, value, node.immutable)
+	}
+	return emptyValue
+}
+
+// declareLexicalBinding creates a single let/const binding in the current
+// lexical environment. When the environment is a declarative record (the usual
+// case for blocks, loops and lexical-scoped programs) const immutability is
+// enforced; otherwise it falls back to an ordinary binding.
+func (rt *runtime) declareLexicalBinding(name string, value Value, immutable bool) {
+	if ds, ok := rt.scope.lexical.(*dclStash); ok {
+		if immutable {
+			ds.createImmutableBinding(name, value)
+			return
+		}
+		if ds.hasBinding(name) {
+			ds.setBinding(name, value, false)
+		} else {
+			ds.createBinding(name, false, value)
+		}
+		return
+	}
+	rt.scope.lexical.setValue(name, value, false)
+}
+
 func (rt *runtime) cmplEvaluateNodeForInStatement(node *nodeForInStatement) Value {
 	labels := append(rt.labels, "") //nolint:gocritic
 	rt.labels = nil
@@ -185,11 +243,25 @@ func (rt *runtime) cmplEvaluateNodeForInStatement(node *nodeForInStatement) Valu
 	into := node.into
 	body := node.body
 
+	// A block-scoped loop variable (for (let k in obj)) gets a fresh binding
+	// per iteration in its own lexical environment.
+	lexical := node.lexicalBinding != ""
+	var outerLexical stasher
+	if lexical {
+		outerLexical = rt.scope.lexical
+		defer func() { rt.scope.lexical = outerLexical }()
+	}
+
 	result := emptyValue
 	obj := sourceObject
 	for obj != nil {
 		enumerateValue := emptyValue
 		obj.enumerate(false, func(name string) bool {
+			if lexical {
+				iterEnv := rt.newDeclarationStash(outerLexical)
+				iterEnv.createBinding(node.lexicalBinding, false, Value{})
+				rt.scope.lexical = iterEnv
+			}
 			into := rt.cmplEvaluateNodeExpression(into)
 			// In the case of: for (var abc in def) ...
 			if into.reference() == nil {
@@ -239,10 +311,35 @@ func (rt *runtime) cmplEvaluateNodeForStatement(node *nodeForStatement) Value {
 	update := node.update
 	body := node.body
 
+	// For block-scoped loop variables (for (let i ...)), each iteration runs in
+	// a fresh copy of the loop environment so that closures created in the body
+	// capture that iteration's bindings.
+	createPerIteration := func() {}
+	if len(node.lexicalBindings) > 0 {
+		outerLexical := rt.scope.lexical
+		loopEnv := rt.newDeclarationStash(outerLexical)
+		for _, name := range node.lexicalBindings {
+			loopEnv.createBinding(name, false, Value{})
+		}
+		rt.scope.lexical = loopEnv
+		defer func() { rt.scope.lexical = outerLexical }()
+
+		createPerIteration = func() {
+			prev := rt.scope.lexical.(*dclStash)
+			next := rt.newDeclarationStash(outerLexical)
+			for _, name := range node.lexicalBindings {
+				next.createBinding(name, false, prev.getBinding(name, false))
+			}
+			rt.scope.lexical = next
+		}
+	}
+
 	if initializer != nil {
 		initialResult := rt.cmplEvaluateNodeExpression(initializer)
 		initialResult.resolve() // Side-effect trigger
 	}
+
+	createPerIteration() // CreatePerIterationEnvironment, before the first test
 
 	result := emptyValue
 resultBreak:
@@ -283,6 +380,7 @@ resultBreak:
 			}
 		}
 	resultContinue:
+		createPerIteration() // copy the bindings forward for the next iteration
 		if update != nil {
 			updateResult := rt.cmplEvaluateNodeExpression(update)
 			updateResult.resolve() // Side-effect trigger

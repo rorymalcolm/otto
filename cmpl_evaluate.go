@@ -12,6 +12,10 @@ func (rt *runtime) cmplEvaluateNodeProgram(node *nodeProgram, eval bool) Value {
 	rt.cmplFunctionDeclaration(node.functionList)
 	rt.cmplVariableDeclaration(node.varList)
 	rt.scope.frame.file = node.file
+	if node.lexical {
+		restore := rt.enterLexicalScope()
+		defer restore()
+	}
 	return rt.cmplEvaluateNodeStatementList(node.body)
 }
 

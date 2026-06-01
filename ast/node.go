@@ -708,6 +708,9 @@ type ForInStatement struct {
 	Source Expression
 	Body   Statement
 	For    file.Idx
+	// Lexical is token.LET or token.CONST when Into declares a block-scoped
+	// loop variable.
+	Lexical token.Token
 }
 
 // Idx0 implements Node.
@@ -730,6 +733,9 @@ type ForStatement struct {
 	Test        Expression
 	Body        Statement
 	For         file.Idx
+	// Lexical is token.LET or token.CONST when the initializer declares
+	// block-scoped loop variables, requiring a per-iteration environment.
+	Lexical token.Token
 }
 
 // Idx0 implements Node.
@@ -912,6 +918,26 @@ func (vs *VariableStatement) Idx1() file.Idx {
 
 // expression implements Statement.
 func (*VariableStatement) statement() {}
+
+// LexicalDeclaration represents a block-scoped let or const declaration.
+type LexicalDeclaration struct {
+	List  []Expression
+	Idx   file.Idx
+	Token token.Token // token.LET or token.CONST
+}
+
+// Idx0 implements Node.
+func (ld *LexicalDeclaration) Idx0() file.Idx {
+	return ld.Idx
+}
+
+// Idx1 implements Node.
+func (ld *LexicalDeclaration) Idx1() file.Idx {
+	return ld.List[len(ld.List)-1].Idx1()
+}
+
+// statement implements Statement.
+func (*LexicalDeclaration) statement() {}
 
 // WhileStatement represents a while statement.
 type WhileStatement struct {

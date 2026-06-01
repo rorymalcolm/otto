@@ -213,6 +213,12 @@ func Walk(v Visitor, n Node) {
 				Walk(v, e)
 			}
 		}
+	case *LexicalDeclaration:
+		if n != nil {
+			for _, e := range n.List {
+				Walk(v, e)
+			}
+		}
 	case *WhileStatement:
 		if n != nil {
 			Walk(v, n.Test)

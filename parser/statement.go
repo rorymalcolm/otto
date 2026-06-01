@@ -84,6 +84,8 @@ func (p *parser) parseStatement() ast.Statement {
 		return p.parseWithStatement()
 	case token.VAR:
 		return p.parseVariableStatement()
+	case token.LET, token.CONST:
+		return p.parseLexicalDeclaration()
 	case token.FUNCTION:
 		return p.parseFunctionStatement()
 	case token.SWITCH:
@@ -636,18 +638,26 @@ func (p *parser) parseForOrForInStatement() ast.Statement {
 	var left []ast.Expression
 
 	forIn := false
+	var lexicalKind token.Token
 	if p.token != token.SEMICOLON {
 		allowIn := p.scope.allowIn
 		p.scope.allowIn = false
-		if p.token == token.VAR {
+		if p.token == token.VAR || p.token == token.LET || p.token == token.CONST {
 			tokenIdx := p.idx
+			kind := p.token
 			var varComments []*ast.Comment
 			if p.mode&StoreComments != 0 {
 				varComments = p.comments.FetchAll()
 				p.comments.Unset()
 			}
 			p.next()
-			list := p.parseVariableDeclarationList(tokenIdx)
+			var list []ast.Expression
+			if kind == token.VAR {
+				list = p.parseVariableDeclarationList(tokenIdx)
+			} else {
+				lexicalKind = kind
+				list = p.parseLexicalBindingList()
+			}
 			if len(list) == 1 && p.token == token.IN {
 				if p.mode&StoreComments != 0 {
 					p.comments.Unset()
@@ -683,6 +693,7 @@ func (p *parser) parseForOrForInStatement() ast.Statement {
 
 		forin := p.parseForIn(left[0])
 		forin.For = idx
+		forin.Lexical = lexicalKind
 		if p.mode&StoreComments != 0 {
 			p.comments.CommentMap.AddComments(forin, comments, ast.LEADING)
 			p.comments.CommentMap.AddComments(forin, forComments, ast.FOR)
@@ -697,6 +708,7 @@ func (p *parser) parseForOrForInStatement() ast.Statement {
 	initializer := &ast.SequenceExpression{Sequence: left}
 	forstatement := p.parseFor(initializer)
 	forstatement.For = idx
+	forstatement.Lexical = lexicalKind
 	if p.mode&StoreComments != 0 {
 		p.comments.CommentMap.AddComments(forstatement, comments, ast.LEADING)
 		p.comments.CommentMap.AddComments(forstatement, forComments, ast.FOR)
@@ -724,6 +736,47 @@ func (p *parser) parseVariableStatement() *ast.VariableStatement {
 	p.semicolon()
 
 	return statement
+}
+
+func (p *parser) parseLexicalDeclaration() *ast.LexicalDeclaration {
+	var comments []*ast.Comment
+	if p.mode&StoreComments != 0 {
+		comments = p.comments.FetchAll()
+	}
+	kind := p.token // token.LET or token.CONST
+	idx := p.expect(kind)
+
+	// Parse the binding list without registering it for var-style hoisting;
+	// lexical bindings are scoped to their enclosing block.
+	list := p.parseLexicalBindingList()
+
+	statement := &ast.LexicalDeclaration{
+		Idx:   idx,
+		Token: kind,
+		List:  list,
+	}
+	if p.mode&StoreComments != 0 {
+		p.comments.CommentMap.AddComments(statement, comments, ast.LEADING)
+		p.comments.Unset()
+	}
+	p.semicolon()
+
+	return statement
+}
+
+// parseLexicalBindingList parses a comma-separated list of let/const bindings.
+// Unlike parseVariableDeclarationList it does not declare the names in the
+// surrounding function scope, since lexical declarations are block-scoped.
+func (p *parser) parseLexicalBindingList() []ast.Expression {
+	var list []ast.Expression
+	for {
+		list = append(list, p.parseVariableDeclaration(nil))
+		if p.token != token.COMMA {
+			break
+		}
+		p.next()
+	}
+	return list
 }
 
 func (p *parser) parseDoWhileStatement() ast.Statement {

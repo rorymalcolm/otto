@@ -207,6 +207,46 @@ func (cmpl *compiler) parseExpression(expr ast.Expression) nodeExpression {
 	}
 }
 
+// parseLoopBody compiles a loop body, flattening a plain block into its
+// statement list (as before) but preserving a block that introduces lexical
+// (let/const) declarations so that each iteration gets a fresh environment.
+func (cmpl *compiler) parseLoopBody(body ast.Statement) []nodeStatement {
+	node := cmpl.parseStatement(body)
+	if block, ok := node.(*nodeBlockStatement); ok && !block.lexical {
+		return block.list
+	}
+	return []nodeStatement{node}
+}
+
+// containsLexicalDeclaration reports whether the statement list directly
+// contains a let/const declaration, in which case the enclosing block needs a
+// lexical environment record.
+func containsLexicalDeclaration(list []ast.Statement) bool {
+	for _, stmt := range list {
+		if _, ok := stmt.(*ast.LexicalDeclaration); ok {
+			return true
+		}
+	}
+	return false
+}
+
+// lexicalBindingNames extracts the names declared by a for-loop's lexical
+// initializer (a sequence of variable expressions).
+func lexicalBindingNames(initializer ast.Expression) []string {
+	var names []string
+	switch init := initializer.(type) {
+	case *ast.SequenceExpression:
+		for _, item := range init.Sequence {
+			if ve, ok := item.(*ast.VariableExpression); ok {
+				names = append(names, ve.Name)
+			}
+		}
+	case *ast.VariableExpression:
+		names = append(names, init.Name)
+	}
+	return names
+}
+
 func (cmpl *compiler) parseStatement(stmt ast.Statement) nodeStatement {
 	if stmt == nil {
 		return nil
@@ -215,10 +255,27 @@ func (cmpl *compiler) parseStatement(stmt ast.Statement) nodeStatement {
 	switch stmt := stmt.(type) {
 	case *ast.BlockStatement:
 		out := &nodeBlockStatement{
-			list: make([]nodeStatement, len(stmt.List)),
+			list:    make([]nodeStatement, len(stmt.List)),
+			lexical: containsLexicalDeclaration(stmt.List),
 		}
 		for i, value := range stmt.List {
 			out.list[i] = cmpl.parseStatement(value)
+		}
+		return out
+
+	case *ast.LexicalDeclaration:
+		out := &nodeLexicalDeclaration{
+			immutable: stmt.Token == token.CONST,
+			bindings:  make([]nodeLexicalBinding, len(stmt.List)),
+		}
+		for i, value := range stmt.List {
+			ve := value.(*ast.VariableExpression)
+			binding := nodeLexicalBinding{name: ve.Name}
+			if ve.Initializer != nil {
+				binding.initializer = cmpl.parseExpression(ve.Initializer)
+				binding.hasValue = true
+			}
+			out.bindings[i] = binding
 		}
 		return out
 
@@ -238,12 +295,7 @@ func (cmpl *compiler) parseStatement(stmt ast.Statement) nodeStatement {
 		out := &nodeDoWhileStatement{
 			test: cmpl.parseExpression(stmt.Test),
 		}
-		body := cmpl.parseStatement(stmt.Body)
-		if block, ok := body.(*nodeBlockStatement); ok {
-			out.body = block.list
-		} else {
-			out.body = append(out.body, body)
-		}
+		out.body = cmpl.parseLoopBody(stmt.Body)
 		return out
 
 	case *ast.EmptyStatement:
@@ -259,12 +311,13 @@ func (cmpl *compiler) parseStatement(stmt ast.Statement) nodeStatement {
 			into:   cmpl.parseExpression(stmt.Into),
 			source: cmpl.parseExpression(stmt.Source),
 		}
-		body := cmpl.parseStatement(stmt.Body)
-		if block, ok := body.(*nodeBlockStatement); ok {
-			out.body = block.list
-		} else {
-			out.body = append(out.body, body)
+		if stmt.Lexical != 0 {
+			out.immutable = stmt.Lexical == token.CONST
+			if ve, ok := stmt.Into.(*ast.VariableExpression); ok {
+				out.lexicalBinding = ve.Name
+			}
 		}
+		out.body = cmpl.parseLoopBody(stmt.Body)
 		return out
 
 	case *ast.ForStatement:
@@ -273,12 +326,11 @@ func (cmpl *compiler) parseStatement(stmt ast.Statement) nodeStatement {
 			update:      cmpl.parseExpression(stmt.Update),
 			test:        cmpl.parseExpression(stmt.Test),
 		}
-		body := cmpl.parseStatement(stmt.Body)
-		if block, ok := body.(*nodeBlockStatement); ok {
-			out.body = block.list
-		} else {
-			out.body = append(out.body, body)
+		if stmt.Lexical != 0 {
+			out.lexicalBindings = lexicalBindingNames(stmt.Initializer)
+			out.immutable = stmt.Lexical == token.CONST
 		}
+		out.body = cmpl.parseLoopBody(stmt.Body)
 		return out
 
 	case *ast.FunctionStatement:
@@ -350,12 +402,7 @@ func (cmpl *compiler) parseStatement(stmt ast.Statement) nodeStatement {
 		out := &nodeWhileStatement{
 			test: cmpl.parseExpression(stmt.Test),
 		}
-		body := cmpl.parseStatement(stmt.Body)
-		if block, ok := body.(*nodeBlockStatement); ok {
-			out.body = block.list
-		} else {
-			out.body = append(out.body, body)
-		}
+		out.body = cmpl.parseLoopBody(stmt.Body)
 		return out
 
 	case *ast.WithStatement:
@@ -381,8 +428,9 @@ func cmplParse(in *ast.Program) *nodeProgram {
 
 func (cmpl *compiler) parse() *nodeProgram {
 	out := &nodeProgram{
-		body: make([]nodeStatement, len(cmpl.program.Body)),
-		file: cmpl.program.File,
+		body:    make([]nodeStatement, len(cmpl.program.Body)),
+		file:    cmpl.program.File,
+		lexical: containsLexicalDeclaration(cmpl.program.Body),
 	}
 	for i, value := range cmpl.program.Body {
 		out.body[i] = cmpl.parseStatement(value)
@@ -407,6 +455,7 @@ type nodeProgram struct {
 	body         []nodeStatement
 	varList      []string
 	functionList []*nodeFunctionLiteral
+	lexical      bool // contains top-level let/const declarations
 }
 
 type node interface{}
@@ -529,7 +578,19 @@ type (
 	}
 
 	nodeBlockStatement struct {
-		list []nodeStatement
+		list    []nodeStatement
+		lexical bool // contains let/const declarations at the block's top level
+	}
+
+	nodeLexicalDeclaration struct {
+		bindings  []nodeLexicalBinding
+		immutable bool // const
+	}
+
+	nodeLexicalBinding struct {
+		name        string
+		initializer nodeExpression
+		hasValue    bool
 	}
 
 	nodeBranchStatement struct {
@@ -561,16 +622,20 @@ type (
 	}
 
 	nodeForInStatement struct {
-		into   nodeExpression
-		source nodeExpression
-		body   []nodeStatement
+		into           nodeExpression
+		source         nodeExpression
+		body           []nodeStatement
+		lexicalBinding string // name of a let/const loop binding, if any
+		immutable      bool
 	}
 
 	nodeForStatement struct {
-		initializer nodeExpression
-		update      nodeExpression
-		test        nodeExpression
-		body        []nodeStatement
+		initializer     nodeExpression
+		update          nodeExpression
+		test            nodeExpression
+		body            []nodeStatement
+		lexicalBindings []string // let/const loop binding names, if any
+		immutable       bool
 	}
 
 	nodeIfStatement struct {
@@ -653,6 +718,7 @@ func (*nodeForInStatement) statementNode()      {}
 func (*nodeForStatement) statementNode()        {}
 func (*nodeIfStatement) statementNode()         {}
 func (*nodeLabelledStatement) statementNode()   {}
+func (*nodeLexicalDeclaration) statementNode()  {}
 func (*nodeReturnStatement) statementNode()     {}
 func (*nodeSwitchStatement) statementNode()     {}
 func (*nodeThrowStatement) statementNode()      {}
