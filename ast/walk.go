@@ -175,6 +175,10 @@ func Walk(v Visitor, n Node) {
 			}
 		}
 	case *StringLiteral:
+	case *SpreadExpression:
+		if n != nil {
+			Walk(v, n.Value)
+		}
 	case *TemplateLiteral:
 		if n != nil {
 			for _, e := range n.Expressions {

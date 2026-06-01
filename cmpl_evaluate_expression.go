@@ -121,9 +121,13 @@ func (rt *runtime) cmplEvaluateNodeArrayLiteral(node *nodeArrayLiteral) Value {
 	valueArray := []Value{}
 
 	for _, node := range node.value {
-		if node == nil {
+		switch node := node.(type) {
+		case nil:
 			valueArray = append(valueArray, emptyValue)
-		} else {
+		case *nodeSpreadExpression:
+			spread := rt.cmplEvaluateNodeExpression(node.value).resolve()
+			valueArray = append(valueArray, rt.spreadIterable(spread)...)
+		default:
 			valueArray = append(valueArray, rt.cmplEvaluateNodeExpression(node).resolve())
 		}
 	}
@@ -131,6 +135,31 @@ func (rt *runtime) cmplEvaluateNodeArrayLiteral(node *nodeArrayLiteral) Value {
 	result := rt.newArrayOf(valueArray)
 
 	return objectValue(result)
+}
+
+// spreadIterable expands a spread value (...value) into a slice of values. It
+// supports arrays, strings (by code point) and array-like objects with a
+// length property.
+func (rt *runtime) spreadIterable(value Value) []Value {
+	switch value.kind {
+	case valueString:
+		runes := []rune(value.string())
+		out := make([]Value, len(runes))
+		for i, r := range runes {
+			out[i] = stringValue(string(r))
+		}
+		return out
+	case valueObject:
+		obj := value.object()
+		length := int64(toUint32(obj.get(propertyLength)))
+		out := make([]Value, 0, length)
+		for i := int64(0); i < length; i++ {
+			out = append(out, obj.get(arrayIndexToString(i)))
+		}
+		return out
+	default:
+		panic(rt.panicTypeError("%v is not iterable", value))
+	}
 }
 
 func (rt *runtime) cmplEvaluateNodeAssignExpression(node *nodeAssignExpression) Value {
@@ -201,6 +230,11 @@ func (rt *runtime) cmplEvaluateNodeCallExpression(node *nodeCallExpression, with
 		argumentList = rt.toValueArray(withArgumentList...)
 	} else {
 		for _, argumentNode := range node.argumentList {
+			if spread, ok := argumentNode.(*nodeSpreadExpression); ok {
+				value := rt.cmplEvaluateNodeExpression(spread.value).resolve()
+				argumentList = append(argumentList, rt.spreadIterable(value)...)
+				continue
+			}
 			argumentList = append(argumentList, rt.cmplEvaluateNodeExpression(argumentNode).resolve())
 		}
 	}

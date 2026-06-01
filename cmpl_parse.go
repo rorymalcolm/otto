@@ -195,6 +195,11 @@ func (cmpl *compiler) parseExpression(expr ast.Expression) nodeExpression {
 		}
 		return out
 
+	case *ast.SpreadExpression:
+		return &nodeSpreadExpression{
+			value: cmpl.parseExpression(expr.Value),
+		}
+
 	case *ast.ThisExpression:
 		return &nodeThisExpression{}
 
@@ -562,6 +567,10 @@ type (
 		sequence []nodeExpression
 	}
 
+	nodeSpreadExpression struct {
+		value nodeExpression
+	}
+
 	nodeTemplateLiteral struct {
 		strings     []string
 		expressions []nodeExpression
@@ -710,6 +719,7 @@ func (*nodeNewExpression) expressionNode()         {}
 func (*nodeObjectLiteral) expressionNode()         {}
 func (*nodeRegExpLiteral) expressionNode()         {}
 func (*nodeSequenceExpression) expressionNode()    {}
+func (*nodeSpreadExpression) expressionNode()      {}
 func (*nodeTemplateLiteral) expressionNode()       {}
 func (*nodeThisExpression) expressionNode()        {}
 func (*nodeUnaryExpression) expressionNode()       {}

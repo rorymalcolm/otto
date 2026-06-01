@@ -660,7 +660,12 @@ func (p *parser) parseArrayLiteral() ast.Expression {
 			continue
 		}
 
-		exp := p.parseAssignmentExpression()
+		var exp ast.Expression
+		if p.token == token.ELLIPSIS {
+			exp = p.parseSpreadElement()
+		} else {
+			exp = p.parseAssignmentExpression()
+		}
 
 		value = append(value, exp)
 		if p.token != token.RIGHT_BRACKET {
@@ -682,13 +687,27 @@ func (p *parser) parseArrayLiteral() ast.Expression {
 	}
 }
 
+// parseSpreadElement parses a ...expr spread element.
+func (p *parser) parseSpreadElement() ast.Expression {
+	idx := p.expect(token.ELLIPSIS)
+	return &ast.SpreadExpression{
+		Idx:   idx,
+		Value: p.parseAssignmentExpression(),
+	}
+}
+
 func (p *parser) parseArgumentList() (argumentList []ast.Expression, idx0, idx1 file.Idx) { //nolint:nonamedreturns
 	if p.mode&StoreComments != 0 {
 		p.comments.Unset()
 	}
 	idx0 = p.expect(token.LEFT_PARENTHESIS)
 	for p.token != token.RIGHT_PARENTHESIS {
-		exp := p.parseAssignmentExpression()
+		var exp ast.Expression
+		if p.token == token.ELLIPSIS {
+			exp = p.parseSpreadElement()
+		} else {
+			exp = p.parseAssignmentExpression()
+		}
 		if p.mode&StoreComments != 0 {
 			p.comments.SetExpression(exp)
 		}

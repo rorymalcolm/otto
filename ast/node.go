@@ -432,6 +432,26 @@ func (sl *StringLiteral) Idx1() file.Idx {
 // expression implements Expression.
 func (*StringLiteral) expression() {}
 
+// SpreadExpression represents a spread element, e.g. ...arr in a call argument
+// list or array literal.
+type SpreadExpression struct {
+	Value Expression
+	Idx   file.Idx
+}
+
+// Idx0 implements Node.
+func (se *SpreadExpression) Idx0() file.Idx {
+	return se.Idx
+}
+
+// Idx1 implements Node.
+func (se *SpreadExpression) Idx1() file.Idx {
+	return se.Value.Idx1()
+}
+
+// expression implements Expression.
+func (*SpreadExpression) expression() {}
+
 // TemplateLiteral represents a template literal, e.g. `abc${def}ghi`.
 //
 // Strings holds the cooked string segments and always contains exactly one
