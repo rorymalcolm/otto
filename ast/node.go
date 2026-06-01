@@ -479,6 +479,52 @@ type PatternProperty struct {
 	Target Expression
 }
 
+// ClassLiteral represents a class definition (declaration or expression).
+type ClassLiteral struct {
+	Name       *Identifier
+	SuperClass Expression // the extends clause, or nil
+	Body       []*ClassElement
+	Source     string
+	Class      file.Idx
+	RightBrace file.Idx
+}
+
+// Idx0 implements Node.
+func (cl *ClassLiteral) Idx0() file.Idx { return cl.Class }
+
+// Idx1 implements Node.
+func (cl *ClassLiteral) Idx1() file.Idx { return cl.RightBrace + 1 }
+
+// expression implements Expression.
+func (*ClassLiteral) expression() {}
+
+// statement implements Statement (a class declaration).
+func (*ClassLiteral) statement() {}
+
+// ClassElement is a single member of a class body.
+type ClassElement struct {
+	// Kind is "method", "get", "set" or "constructor".
+	Kind          string
+	Static        bool
+	Key           string
+	KeyExpression Expression // computed key, or nil
+	Method        *FunctionLiteral
+}
+
+// SuperExpression represents the `super` keyword.
+type SuperExpression struct {
+	Idx file.Idx
+}
+
+// Idx0 implements Node.
+func (se *SuperExpression) Idx0() file.Idx { return se.Idx }
+
+// Idx1 implements Node.
+func (se *SuperExpression) Idx1() file.Idx { return se.Idx + 5 }
+
+// expression implements Expression.
+func (*SuperExpression) expression() {}
+
 // SpreadExpression represents a spread element, e.g. ...arr in a call argument
 // list or array literal.
 type SpreadExpression struct {

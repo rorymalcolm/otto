@@ -137,6 +137,11 @@ func (p *parser) parsePrimaryExpression() ast.Expression {
 		}
 	case token.FUNCTION:
 		return p.parseFunction(false)
+	case token.CLASS:
+		return p.parseClass(false)
+	case token.SUPER:
+		p.next()
+		return &ast.SuperExpression{Idx: idx}
 	}
 
 	p.errorUnexpectedToken(p.token)

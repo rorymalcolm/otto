@@ -116,6 +116,10 @@ const (
 	DEBUGGER
 	// Instance of.
 	INSTANCEOF
+	// Classes.
+	CLASS
+	EXTENDS
+	SUPER
 )
 
 var token2string = [...]string{
@@ -209,6 +213,9 @@ var token2string = [...]string{
 	CONTINUE:                    "continue",
 	DEBUGGER:                    "debugger",
 	INSTANCEOF:                  "instanceof",
+	CLASS:                       "class",
+	EXTENDS:                     "extends",
+	SUPER:                       "super",
 }
 
 var keywordTable = map[string]keyword{
@@ -297,8 +304,13 @@ var keywordTable = map[string]keyword{
 		token: INSTANCEOF,
 	},
 	"class": {
-		token:         KEYWORD,
-		futureKeyword: true,
+		token: CLASS,
+	},
+	"extends": {
+		token: EXTENDS,
+	},
+	"super": {
+		token: SUPER,
 	},
 	"enum": {
 		token:         KEYWORD,
@@ -308,15 +320,7 @@ var keywordTable = map[string]keyword{
 		token:         KEYWORD,
 		futureKeyword: true,
 	},
-	"extends": {
-		token:         KEYWORD,
-		futureKeyword: true,
-	},
 	"import": {
-		token:         KEYWORD,
-		futureKeyword: true,
-	},
-	"super": {
 		token:         KEYWORD,
 		futureKeyword: true,
 	},

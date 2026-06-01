@@ -119,6 +119,12 @@ type nodeFunctionObject struct {
 	// this holds the lexically captured `this` for arrow functions. It is
 	// only meaningful when node.isArrow is true.
 	this Value
+	// homeObject is the object a class/method was defined on, used to resolve
+	// `super` references. It is nil for ordinary functions.
+	homeObject *object
+	// defaultDerivedCtor marks a synthesised default constructor of a derived
+	// class, which forwards its arguments to the super constructor.
+	defaultDerivedCtor bool
 }
 
 func (rt *runtime) newNodeFunctionObject(node *nodeFunctionLiteral, stash stasher) *object {
@@ -220,6 +226,10 @@ func (o *object) call(this Value, argumentList []Value, eval bool, frm frame) Va
 		defer func() {
 			rt.leaveScope()
 		}()
+		// A default derived constructor implicitly forwards to super(...args).
+		if fn.defaultDerivedCtor {
+			rt.superConstructor().call(this, argumentList, false, frm)
+		}
 		callValue := rt.cmplCallNodeFunction(o, stash, fn.node, argumentList)
 		if value, valid := callValue.value.(result); valid {
 			return value.value

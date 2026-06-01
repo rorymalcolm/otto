@@ -204,6 +204,12 @@ func (cmpl *compiler) parseExpression(expr ast.Expression) nodeExpression {
 			value: cmpl.parseExpression(expr.Value),
 		}
 
+	case *ast.SuperExpression:
+		return &nodeSuperExpression{}
+
+	case *ast.ClassLiteral:
+		return cmpl.parseClassLiteral(expr)
+
 	case *ast.ArrayPattern:
 		out := &nodeArrayPattern{
 			elements: make([]nodeExpression, len(expr.Elements)),
@@ -262,15 +268,42 @@ func (cmpl *compiler) parseLoopBody(body ast.Statement) []nodeStatement {
 }
 
 // containsLexicalDeclaration reports whether the statement list directly
-// contains a let/const declaration, in which case the enclosing block needs a
-// lexical environment record.
+// contains a let/const or class declaration, in which case the enclosing block
+// needs a lexical environment record.
 func containsLexicalDeclaration(list []ast.Statement) bool {
 	for _, stmt := range list {
-		if _, ok := stmt.(*ast.LexicalDeclaration); ok {
+		switch stmt.(type) {
+		case *ast.LexicalDeclaration, *ast.ClassLiteral:
 			return true
 		}
 	}
 	return false
+}
+
+func classLiteralName(class *ast.ClassLiteral) string {
+	if class.Name != nil {
+		return class.Name.Name
+	}
+	return ""
+}
+
+func (cmpl *compiler) parseClassLiteral(expr *ast.ClassLiteral) *nodeClassLiteral {
+	out := &nodeClassLiteral{
+		name:       classLiteralName(expr),
+		superClass: cmpl.parseExpression(expr.SuperClass),
+		source:     expr.Source,
+		elements:   make([]nodeClassElement, len(expr.Body)),
+	}
+	for i, element := range expr.Body {
+		out.elements[i] = nodeClassElement{
+			kind:    element.Kind,
+			static:  element.Static,
+			key:     element.Key,
+			keyExpr: cmpl.parseExpression(element.KeyExpression),
+			method:  cmpl.parseExpression(element.Method).(*nodeFunctionLiteral),
+		}
+	}
+	return out
 }
 
 // astPatternNames returns all identifier names bound by a destructuring
@@ -338,6 +371,12 @@ func (cmpl *compiler) parseStatement(stmt ast.Statement) nodeStatement {
 			out.list[i] = cmpl.parseStatement(value)
 		}
 		return out
+
+	case *ast.ClassLiteral:
+		return &nodeClassStatement{
+			name:  classLiteralName(stmt),
+			class: cmpl.parseClassLiteral(stmt),
+		}
 
 	case *ast.LexicalDeclaration:
 		out := &nodeLexicalDeclaration{
@@ -643,6 +682,23 @@ type (
 		rest     nodeExpression
 	}
 
+	nodeSuperExpression struct{}
+
+	nodeClassLiteral struct {
+		name       string
+		superClass nodeExpression
+		elements   []nodeClassElement
+		source     string
+	}
+
+	nodeClassElement struct {
+		kind    string // "method", "get", "set", "constructor"
+		static  bool
+		key     string
+		keyExpr nodeExpression
+		method  *nodeFunctionLiteral
+	}
+
 	nodeObjectPattern struct {
 		properties []nodeObjectPatternProperty
 		rest       nodeExpression
@@ -689,6 +745,11 @@ type (
 	nodeLexicalDeclaration struct {
 		bindings  []nodeLexicalBinding
 		immutable bool // const
+	}
+
+	nodeClassStatement struct {
+		name  string
+		class *nodeClassLiteral
 	}
 
 	nodeLexicalBinding struct {
@@ -809,6 +870,8 @@ func (*nodeSequenceExpression) expressionNode()    {}
 func (*nodeSpreadExpression) expressionNode()      {}
 func (*nodeArrayPattern) expressionNode()          {}
 func (*nodeObjectPattern) expressionNode()         {}
+func (*nodeSuperExpression) expressionNode()       {}
+func (*nodeClassLiteral) expressionNode()          {}
 func (*nodeTemplateLiteral) expressionNode()       {}
 func (*nodeThisExpression) expressionNode()        {}
 func (*nodeUnaryExpression) expressionNode()       {}
@@ -829,6 +892,7 @@ func (*nodeForStatement) statementNode()        {}
 func (*nodeIfStatement) statementNode()         {}
 func (*nodeLabelledStatement) statementNode()   {}
 func (*nodeLexicalDeclaration) statementNode()  {}
+func (*nodeClassStatement) statementNode()      {}
 func (*nodeReturnStatement) statementNode()     {}
 func (*nodeSwitchStatement) statementNode()     {}
 func (*nodeThrowStatement) statementNode()      {}

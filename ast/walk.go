@@ -175,6 +175,19 @@ func Walk(v Visitor, n Node) {
 			}
 		}
 	case *StringLiteral:
+	case *SuperExpression:
+	case *ClassLiteral:
+		if n != nil {
+			if n.SuperClass != nil {
+				Walk(v, n.SuperClass)
+			}
+			for _, element := range n.Body {
+				if element.KeyExpression != nil {
+					Walk(v, element.KeyExpression)
+				}
+				Walk(v, element.Method)
+			}
+		}
 	case *SpreadExpression:
 		if n != nil {
 			Walk(v, n.Value)

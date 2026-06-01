@@ -240,7 +240,7 @@ func TestParserErr(t *testing.T) {
 
 		test("a if", "(anonymous): Line 1:3 Unexpected token if")
 
-		test("a class", "(anonymous): Line 1:3 Unexpected reserved word")
+		test("a class", "(anonymous): Line 1:3 Unexpected token class")
 
 		test("break\n", "(anonymous): Line 1:1 Illegal break statement")
 
@@ -393,7 +393,7 @@ func TestParserErr(t *testing.T) {
 
 		test("/\\1/.source", "(anonymous): Line 1:1 Invalid regular expression: re2: Invalid \\1 <backreference>")
 
-		test("var class", "(anonymous): Line 1:5 Unexpected reserved word")
+		test("var class", "(anonymous): Line 1:5 Unexpected token class")
 
 		test("var if", "(anonymous): Line 1:5 Unexpected token if")
 
@@ -426,9 +426,9 @@ func TestParserErr(t *testing.T) {
 		}
 
 		{ // Reserved words
-			test("class", "(anonymous): Line 1:1 Unexpected reserved word")
+			test("class", "(anonymous): Line 1:6 Unexpected end of input")
 			test("abc.class = 1", nil)
-			test("var class;", "(anonymous): Line 1:5 Unexpected reserved word")
+			test("var class;", "(anonymous): Line 1:5 Unexpected token class")
 
 			// const is now a declaration keyword rather than a reserved word.
 			test("const", "(anonymous): Line 1:6 Unexpected end of input")
@@ -443,17 +443,17 @@ func TestParserErr(t *testing.T) {
 			test("abc.export = 1", nil)
 			test("var export;", "(anonymous): Line 1:5 Unexpected reserved word")
 
-			test("extends", "(anonymous): Line 1:1 Unexpected reserved word")
+			test("extends", "(anonymous): Line 1:1 Unexpected token extends")
 			test("abc.extends = 1", nil)
-			test("var extends;", "(anonymous): Line 1:5 Unexpected reserved word")
+			test("var extends;", "(anonymous): Line 1:5 Unexpected token extends")
 
 			test("import", "(anonymous): Line 1:1 Unexpected reserved word")
 			test("abc.import = 1", nil)
 			test("var import;", "(anonymous): Line 1:5 Unexpected reserved word")
 
-			test("super", "(anonymous): Line 1:1 Unexpected reserved word")
+			test("super", nil)
 			test("abc.super = 1", nil)
-			test("var super;", "(anonymous): Line 1:5 Unexpected reserved word")
+			test("var super;", "(anonymous): Line 1:5 Unexpected token super")
 		}
 
 		{ // Reserved words (strict)

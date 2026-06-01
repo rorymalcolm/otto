@@ -29,6 +29,9 @@ func (rt *runtime) cmplEvaluateNodeStatement(node nodeStatement) Value {
 	case *nodeLexicalDeclaration:
 		return rt.cmplEvaluateNodeLexicalDeclaration(node)
 
+	case *nodeClassStatement:
+		return rt.cmplEvaluateNodeClassStatement(node)
+
 	case *nodeBranchStatement:
 		target := node.label
 		switch node.branch { // FIXME Maybe node.kind? node.operator?

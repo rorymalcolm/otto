@@ -104,6 +104,14 @@ func (rt *runtime) cmplEvaluateNodeExpression(node nodeExpression) Value {
 		}
 		return stringValue(b.String())
 
+	case *nodeClassLiteral:
+		return rt.cmplEvaluateNodeClassLiteral(node)
+
+	case *nodeSuperExpression:
+		// A bare `super` is only meaningful as part of super(...) or super.x,
+		// which are handled by the call and member evaluators.
+		panic(rt.panicSyntaxError("'super' keyword unexpected here"))
+
 	case *nodeThisExpression:
 		return objectValue(rt.scope.this)
 
@@ -230,6 +238,21 @@ func (rt *runtime) cmplEvaluateNodeBracketExpression(node *nodeBracketExpression
 }
 
 func (rt *runtime) cmplEvaluateNodeCallExpression(node *nodeCallExpression, withArgumentList []interface{}) Value {
+	// super(...) and super.method(...) calls.
+	switch callee := node.callee.(type) {
+	case *nodeSuperExpression:
+		return rt.evaluateSuperConstructorCall(node)
+	case *nodeDotExpression:
+		if _, ok := callee.left.(*nodeSuperExpression); ok {
+			return rt.evaluateSuperMethodCall(callee.identifier, node)
+		}
+	case *nodeBracketExpression:
+		if _, ok := callee.left.(*nodeSuperExpression); ok {
+			key := rt.cmplEvaluateNodeExpression(callee.member).resolve().string()
+			return rt.evaluateSuperMethodCall(key, node)
+		}
+	}
+
 	this := Value{}
 	callee := rt.cmplEvaluateNodeExpression(node.callee)
 
@@ -237,14 +260,7 @@ func (rt *runtime) cmplEvaluateNodeCallExpression(node *nodeCallExpression, with
 	if withArgumentList != nil {
 		argumentList = rt.toValueArray(withArgumentList...)
 	} else {
-		for _, argumentNode := range node.argumentList {
-			if spread, ok := argumentNode.(*nodeSpreadExpression); ok {
-				value := rt.cmplEvaluateNodeExpression(spread.value).resolve()
-				argumentList = append(argumentList, rt.spreadIterable(value)...)
-				continue
-			}
-			argumentList = append(argumentList, rt.cmplEvaluateNodeExpression(argumentNode).resolve())
-		}
+		argumentList = rt.evaluateArgumentList(node.argumentList)
 	}
 
 	eval := false // Whether this call is a (candidate for) direct call to eval
@@ -304,6 +320,10 @@ func (rt *runtime) cmplEvaluateNodeConditionalExpression(node *nodeConditionalEx
 }
 
 func (rt *runtime) cmplEvaluateNodeDotExpression(node *nodeDotExpression) Value {
+	if _, ok := node.left.(*nodeSuperExpression); ok {
+		// super.x: read the member from the parent prototype.
+		return rt.superPrototype().get(node.identifier)
+	}
 	target := rt.cmplEvaluateNodeExpression(node.left)
 	targetValue := target.resolve()
 	// TODO Pass in base value as-is, and defer toObject till later?

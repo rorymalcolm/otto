@@ -86,6 +86,8 @@ func (p *parser) parseStatement() ast.Statement {
 		return p.parseVariableStatement()
 	case token.LET, token.CONST:
 		return p.parseLexicalDeclaration()
+	case token.CLASS:
+		return p.parseClass(true)
 	case token.FUNCTION:
 		return p.parseFunctionStatement()
 	case token.SWITCH:
@@ -315,6 +317,96 @@ func (p *parser) parseFunction(declaration bool) *ast.FunctionLiteral {
 	p.parseFunctionBlock(node)
 	node.Source = p.slice(node.Idx0(), node.Idx1())
 
+	return node
+}
+
+func (p *parser) parseClass(declaration bool) *ast.ClassLiteral {
+	node := &ast.ClassLiteral{
+		Class: p.expect(token.CLASS),
+	}
+
+	if p.token == token.IDENTIFIER {
+		node.Name = p.parseIdentifier()
+	} else if declaration {
+		p.expect(token.IDENTIFIER)
+	}
+
+	if p.token == token.EXTENDS {
+		p.next()
+		node.SuperClass = p.parseLeftHandSideExpressionAllowCall()
+	}
+
+	p.expect(token.LEFT_BRACE)
+	for p.token != token.RIGHT_BRACE && p.token != token.EOF {
+		if p.token == token.SEMICOLON {
+			p.next()
+			continue
+		}
+		node.Body = append(node.Body, p.parseClassElement())
+	}
+	node.RightBrace = p.expect(token.RIGHT_BRACE)
+	node.Source = p.slice(node.Idx0(), node.Idx1())
+
+	return node
+}
+
+func (p *parser) parseClassElement() *ast.ClassElement {
+	element := &ast.ClassElement{Kind: "method"}
+	methodIdx := p.idx
+
+	// static modifier (unless "static" is itself the method name).
+	if p.token == token.IDENTIFIER && p.literal == "static" {
+		p.next()
+		if p.token == token.LEFT_PARENTHESIS {
+			element.Key = "static"
+			element.Method = p.parseClassMethodDefinition(methodIdx)
+			return element
+		}
+		element.Static = true
+		methodIdx = p.idx
+	}
+
+	// get / set accessor (unless "get"/"set" is itself the method name).
+	if p.token == token.IDENTIFIER && (p.literal == "get" || p.literal == "set") {
+		accessor := p.literal
+		p.next()
+		if p.token == token.LEFT_PARENTHESIS {
+			element.Key = accessor
+			element.Method = p.parseClassMethodDefinition(methodIdx)
+			return element
+		}
+		element.Kind = accessor
+		p.parseClassElementKey(element)
+		element.Method = p.parseClassMethodDefinition(methodIdx)
+		return element
+	}
+
+	p.parseClassElementKey(element)
+	element.Method = p.parseClassMethodDefinition(methodIdx)
+	if !element.Static && element.Kind == "method" && element.Key == "constructor" {
+		element.Kind = "constructor"
+	}
+	return element
+}
+
+func (p *parser) parseClassElementKey(element *ast.ClassElement) {
+	if p.token == token.LEFT_BRACKET {
+		keyExpr, _ := p.parseComputedPropertyKey()
+		element.KeyExpression = keyExpr
+		return
+	}
+	_, key := p.parseObjectPropertyKey()
+	element.Key = key
+}
+
+func (p *parser) parseClassMethodDefinition(idx file.Idx) *ast.FunctionLiteral {
+	parameterList := p.parseFunctionParameterList()
+	node := &ast.FunctionLiteral{
+		Function:      idx,
+		ParameterList: parameterList,
+	}
+	p.parseFunctionBlock(node)
+	node.Source = p.slice(node.Idx0(), node.Idx1())
 	return node
 }
 

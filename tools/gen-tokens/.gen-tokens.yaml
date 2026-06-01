@@ -182,18 +182,17 @@ tokens:
   - group: Instance of
   - name: INSTANCEOF
 
+  - group: Classes
+  - name: CLASS
+  - name: EXTENDS
+  - name: SUPER
+
   # Future
-  - name: class
-    future: true
   - name: enum
     future: true
   - name: export
     future: true
-  - name: extends
-    future: true
   - name: import
-    future: true
-  - name: super
     future: true
 
   # Future Strict items
