@@ -119,7 +119,11 @@ func (cmpl *compiler) parseExpression(expr ast.Expression) nodeExpression {
 				out.functionList = append(out.functionList, cmpl.parseExpression(value.Function).(*nodeFunctionLiteral))
 			case *ast.VariableDeclaration:
 				for _, value := range value.List {
-					out.varList = append(out.varList, value.Name)
+					if value.Target != nil {
+						out.varList = append(out.varList, astPatternNames(value.Target)...)
+					} else {
+						out.varList = append(out.varList, value.Name)
+					}
 				}
 			default:
 				panic(fmt.Sprintf("parse expression unknown function declaration type %T", value))
@@ -200,6 +204,30 @@ func (cmpl *compiler) parseExpression(expr ast.Expression) nodeExpression {
 			value: cmpl.parseExpression(expr.Value),
 		}
 
+	case *ast.ArrayPattern:
+		out := &nodeArrayPattern{
+			elements: make([]nodeExpression, len(expr.Elements)),
+			rest:     cmpl.parseExpression(expr.Rest),
+		}
+		for i, element := range expr.Elements {
+			out.elements[i] = cmpl.parseExpression(element)
+		}
+		return out
+
+	case *ast.ObjectPattern:
+		out := &nodeObjectPattern{
+			properties: make([]nodeObjectPatternProperty, len(expr.Properties)),
+			rest:       cmpl.parseExpression(expr.Rest),
+		}
+		for i, prop := range expr.Properties {
+			out.properties[i] = nodeObjectPatternProperty{
+				key:     prop.Key,
+				keyExpr: cmpl.parseExpression(prop.KeyExpression),
+				target:  cmpl.parseExpression(prop.Target),
+			}
+		}
+		return out
+
 	case *ast.ThisExpression:
 		return &nodeThisExpression{}
 
@@ -215,6 +243,7 @@ func (cmpl *compiler) parseExpression(expr ast.Expression) nodeExpression {
 			idx:         expr.Idx0(),
 			name:        expr.Name,
 			initializer: cmpl.parseExpression(expr.Initializer),
+			target:      cmpl.parseExpression(expr.Target),
 		}
 	default:
 		panic(fmt.Errorf("parse expression unknown node type %T", expr))
@@ -242,6 +271,39 @@ func containsLexicalDeclaration(list []ast.Statement) bool {
 		}
 	}
 	return false
+}
+
+// astPatternNames returns all identifier names bound by a destructuring
+// binding pattern, used to hoist var-declared pattern bindings.
+func astPatternNames(target ast.Expression) []string {
+	var names []string
+	var walk func(ast.Expression)
+	walk = func(e ast.Expression) {
+		switch t := e.(type) {
+		case *ast.Identifier:
+			names = append(names, t.Name)
+		case *ast.AssignExpression:
+			walk(t.Left)
+		case *ast.ArrayPattern:
+			for _, element := range t.Elements {
+				if element != nil {
+					walk(element)
+				}
+			}
+			if t.Rest != nil {
+				walk(t.Rest)
+			}
+		case *ast.ObjectPattern:
+			for _, prop := range t.Properties {
+				walk(prop.Target)
+			}
+			if t.Rest != nil {
+				walk(t.Rest)
+			}
+		}
+	}
+	walk(target)
+	return names
 }
 
 // lexicalBindingNames extracts the names declared by a for-loop's lexical
@@ -284,7 +346,10 @@ func (cmpl *compiler) parseStatement(stmt ast.Statement) nodeStatement {
 		}
 		for i, value := range stmt.List {
 			ve := value.(*ast.VariableExpression)
-			binding := nodeLexicalBinding{name: ve.Name}
+			binding := nodeLexicalBinding{
+				name:   ve.Name,
+				target: cmpl.parseExpression(ve.Target),
+			}
 			if ve.Initializer != nil {
 				binding.initializer = cmpl.parseExpression(ve.Initializer)
 				binding.hasValue = true
@@ -327,6 +392,7 @@ func (cmpl *compiler) parseStatement(stmt ast.Statement) nodeStatement {
 		}
 		out.of = stmt.Of
 		if stmt.Lexical != 0 {
+			out.lexical = true
 			out.immutable = stmt.Lexical == token.CONST
 			if ve, ok := stmt.Into.(*ast.VariableExpression); ok {
 				out.lexicalBinding = ve.Name
@@ -572,6 +638,22 @@ type (
 		value nodeExpression
 	}
 
+	nodeArrayPattern struct {
+		elements []nodeExpression // nil entry = elision (hole)
+		rest     nodeExpression
+	}
+
+	nodeObjectPattern struct {
+		properties []nodeObjectPatternProperty
+		rest       nodeExpression
+	}
+
+	nodeObjectPatternProperty struct {
+		key     string
+		keyExpr nodeExpression
+		target  nodeExpression
+	}
+
 	nodeTemplateLiteral struct {
 		strings     []string
 		expressions []nodeExpression
@@ -589,6 +671,7 @@ type (
 		initializer nodeExpression
 		name        string
 		idx         file.Idx
+		target      nodeExpression // destructuring pattern, when name is empty
 	}
 )
 
@@ -612,6 +695,7 @@ type (
 		name        string
 		initializer nodeExpression
 		hasValue    bool
+		target      nodeExpression // destructuring pattern, when name is empty
 	}
 
 	nodeBranchStatement struct {
@@ -647,8 +731,9 @@ type (
 		source         nodeExpression
 		body           []nodeStatement
 		lexicalBinding string // name of a let/const loop binding, if any
-		immutable      bool
-		of             bool // for-of (iterate values) rather than for-in (keys)
+		lexical        bool   // the loop variable is a let/const binding
+		immutable      bool   // const loop variable
+		of             bool   // for-of (iterate values) rather than for-in (keys)
 	}
 
 	nodeForStatement struct {
@@ -722,6 +807,8 @@ func (*nodeObjectLiteral) expressionNode()         {}
 func (*nodeRegExpLiteral) expressionNode()         {}
 func (*nodeSequenceExpression) expressionNode()    {}
 func (*nodeSpreadExpression) expressionNode()      {}
+func (*nodeArrayPattern) expressionNode()          {}
+func (*nodeObjectPattern) expressionNode()         {}
 func (*nodeTemplateLiteral) expressionNode()       {}
 func (*nodeThisExpression) expressionNode()        {}
 func (*nodeUnaryExpression) expressionNode()       {}

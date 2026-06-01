@@ -211,6 +211,29 @@ func Walk(v Visitor, n Node) {
 		if n != nil {
 			Walk(v, n.Initializer)
 		}
+	case *ArrayPattern:
+		if n != nil {
+			for _, e := range n.Elements {
+				if e != nil {
+					Walk(v, e)
+				}
+			}
+			if n.Rest != nil {
+				Walk(v, n.Rest)
+			}
+		}
+	case *ObjectPattern:
+		if n != nil {
+			for _, prop := range n.Properties {
+				if prop.KeyExpression != nil {
+					Walk(v, prop.KeyExpression)
+				}
+				Walk(v, prop.Target)
+			}
+			if n.Rest != nil {
+				Walk(v, n.Rest)
+			}
+		}
 	case *VariableStatement:
 		if n != nil {
 			for _, e := range n.List {

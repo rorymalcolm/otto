@@ -4,6 +4,7 @@ import (
 	"fmt"
 	goruntime "runtime"
 
+	"github.com/robertkrimen/otto/file"
 	"github.com/robertkrimen/otto/token"
 )
 
@@ -162,6 +163,102 @@ resultBreak:
 	return result
 }
 
+// bindMode selects what binding a destructuring pattern performs at each leaf.
+type bindMode int
+
+const (
+	bindAssign bindMode = iota // assign to an existing reference
+	bindLet                    // declare a new let binding
+	bindConst                  // declare a new const binding
+)
+
+// bindPattern binds a value against a destructuring target (an identifier, a
+// member reference, a nested pattern, or a target-with-default), using the
+// given mode at each leaf.
+func (rt *runtime) bindPattern(target nodeExpression, value Value, mode bindMode) {
+	switch t := target.(type) {
+	case *nodeIdentifier:
+		rt.bindName(t.name, value, mode, t.idx)
+	case *nodeDotExpression, *nodeBracketExpression:
+		// Only valid in assignment destructuring; assign to the member.
+		ref := rt.cmplEvaluateNodeExpression(target)
+		rt.putValue(ref.reference(), value)
+	case *nodeAssignExpression:
+		// target = default
+		if value.IsUndefined() {
+			value = rt.cmplEvaluateNodeExpression(t.right).resolve()
+		}
+		rt.bindPattern(t.left, value, mode)
+	case *nodeArrayPattern:
+		rt.bindArrayPattern(t, value, mode)
+	case *nodeObjectPattern:
+		rt.bindObjectPattern(t, value, mode)
+	default:
+		panic(rt.panicTypeError("invalid destructuring target %T", target))
+	}
+}
+
+func (rt *runtime) bindName(name string, value Value, mode bindMode, idx file.Idx) {
+	switch mode {
+	case bindLet:
+		rt.declareLexicalBinding(name, value, false)
+	case bindConst:
+		rt.declareLexicalBinding(name, value, true)
+	default: // bindAssign
+		ref := getIdentifierReference(rt, rt.scope.lexical, name, false, at(idx))
+		rt.putValue(ref, value)
+	}
+}
+
+func (rt *runtime) bindArrayPattern(pattern *nodeArrayPattern, value Value, mode bindMode) {
+	values := rt.spreadIterable(value)
+	for i, element := range pattern.elements {
+		if element == nil {
+			continue // elision (hole)
+		}
+		var elementValue Value
+		if i < len(values) {
+			elementValue = values[i]
+		}
+		rt.bindPattern(element, elementValue, mode)
+	}
+	if pattern.rest != nil {
+		rest := []Value{}
+		if len(pattern.elements) < len(values) {
+			rest = append(rest, values[len(pattern.elements):]...)
+		}
+		rt.bindPattern(pattern.rest, objectValue(rt.newArrayOf(rest)), mode)
+	}
+}
+
+func (rt *runtime) bindObjectPattern(pattern *nodeObjectPattern, value Value, mode bindMode) {
+	switch value.kind {
+	case valueUndefined, valueNull:
+		panic(rt.panicTypeError("cannot destructure %v", value))
+	}
+	obj := rt.toObject(value)
+
+	taken := map[string]bool{}
+	for _, prop := range pattern.properties {
+		key := prop.key
+		if prop.keyExpr != nil {
+			key = rt.cmplEvaluateNodeExpression(prop.keyExpr).resolve().string()
+		}
+		taken[key] = true
+		rt.bindPattern(prop.target, obj.get(key), mode)
+	}
+	if pattern.rest != nil {
+		rest := rt.newObject()
+		obj.enumerate(false, func(name string) bool {
+			if !taken[name] {
+				rest.put(name, obj.get(name), false)
+			}
+			return true
+		})
+		rt.bindPattern(pattern.rest, objectValue(rest), mode)
+	}
+}
+
 // cmplEvaluateNodeBlockStatement evaluates a block, introducing a fresh lexical
 // environment record when the block contains let/const declarations.
 func (rt *runtime) cmplEvaluateNodeBlockStatement(node *nodeBlockStatement) Value {
@@ -200,6 +297,14 @@ func (rt *runtime) cmplEvaluateNodeLexicalDeclaration(node *nodeLexicalDeclarati
 		value := Value{}
 		if binding.hasValue {
 			value = rt.cmplEvaluateNodeExpression(binding.initializer).resolve()
+		}
+		if binding.target != nil {
+			mode := bindLet
+			if node.immutable {
+				mode = bindConst
+			}
+			rt.bindPattern(binding.target, value, mode)
+			continue
 		}
 		rt.declareLexicalBinding(binding.name, value, node.immutable)
 	}
@@ -306,6 +411,39 @@ func (rt *runtime) cmplEvaluateNodeForInStatement(node *nodeForInStatement) Valu
 	return result
 }
 
+// bindForTarget binds a loop value to a for-of/for-in loop target, which may be
+// a declared name, a destructuring pattern, or an existing assignment target.
+func (rt *runtime) bindForTarget(into nodeExpression, value Value, lexical, immutable bool) {
+	if ve, ok := into.(*nodeVariableExpression); ok {
+		if ve.target != nil {
+			mode := bindAssign
+			if lexical {
+				mode = bindLet
+				if immutable {
+					mode = bindConst
+				}
+			}
+			rt.bindPattern(ve.target, value, mode)
+			return
+		}
+		if lexical {
+			rt.declareLexicalBinding(ve.name, value, immutable)
+			return
+		}
+		ref := getIdentifierReference(rt, rt.scope.lexical, ve.name, false, at(ve.idx))
+		rt.putValue(ref, value)
+		return
+	}
+
+	// An existing identifier or member assignment target.
+	ref := rt.cmplEvaluateNodeExpression(into)
+	if ref.reference() == nil {
+		identifier := ref.string()
+		ref = toValue(getIdentifierReference(rt, rt.scope.lexical, identifier, false, -1))
+	}
+	rt.putValue(ref.reference(), value)
+}
+
 // cmplEvaluateNodeForOfStatement evaluates a for-of loop, iterating the values
 // of an iterable. Arrays, strings and array-like objects are supported. A
 // block-scoped loop variable (for (let x of ...)) gets a fresh binding per
@@ -324,7 +462,7 @@ func (rt *runtime) cmplEvaluateNodeForOfStatement(node *nodeForInStatement) Valu
 	into := node.into
 	body := node.body
 
-	lexical := node.lexicalBinding != ""
+	lexical := node.lexical
 	var outerLexical stasher
 	if lexical {
 		outerLexical = rt.scope.lexical
@@ -334,24 +472,11 @@ func (rt *runtime) cmplEvaluateNodeForOfStatement(node *nodeForInStatement) Valu
 	result := emptyValue
 forLoop:
 	for _, iterationValue := range values {
-		if lexical && node.immutable {
-			// A const binding is initialised directly with the iteration value.
-			iterEnv := rt.newDeclarationStash(outerLexical)
-			iterEnv.createImmutableBinding(node.lexicalBinding, iterationValue)
-			rt.scope.lexical = iterEnv
-		} else {
-			if lexical {
-				iterEnv := rt.newDeclarationStash(outerLexical)
-				iterEnv.createBinding(node.lexicalBinding, false, Value{})
-				rt.scope.lexical = iterEnv
-			}
-			ref := rt.cmplEvaluateNodeExpression(into)
-			if ref.reference() == nil {
-				identifier := ref.string()
-				ref = toValue(getIdentifierReference(rt, rt.scope.lexical, identifier, false, -1))
-			}
-			rt.putValue(ref.reference(), iterationValue)
+		if lexical {
+			// A fresh per-iteration environment for the loop binding(s).
+			rt.scope.lexical = rt.newDeclarationStash(outerLexical)
 		}
+		rt.bindForTarget(into, iterationValue, lexical, node.immutable)
 
 		for _, n := range body {
 			value := rt.cmplEvaluateNodeStatement(n)

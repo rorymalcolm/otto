@@ -163,6 +163,14 @@ func (rt *runtime) spreadIterable(value Value) []Value {
 }
 
 func (rt *runtime) cmplEvaluateNodeAssignExpression(node *nodeAssignExpression) Value {
+	// Destructuring assignment: [a, b] = ... or ({a, b} = ...).
+	switch node.left.(type) {
+	case *nodeArrayPattern, *nodeObjectPattern:
+		rightValue := rt.cmplEvaluateNodeExpression(node.right).resolve()
+		rt.bindPattern(node.left, rightValue, bindAssign)
+		return rightValue
+	}
+
 	left := rt.cmplEvaluateNodeExpression(node.left)
 	right := rt.cmplEvaluateNodeExpression(node.right)
 	rightValue := right.resolve()
@@ -488,6 +496,16 @@ func (rt *runtime) cmplEvaluateNodeUnaryExpression(node *nodeUnaryExpression) Va
 }
 
 func (rt *runtime) cmplEvaluateNodeVariableExpression(node *nodeVariableExpression) Value {
+	if node.target != nil {
+		// var destructuring: the bound names are already hoisted, so assign
+		// into them.
+		value := Value{}
+		if node.initializer != nil {
+			value = rt.cmplEvaluateNodeExpression(node.initializer).resolve()
+		}
+		rt.bindPattern(node.target, value, bindAssign)
+		return emptyValue
+	}
 	if node.initializer != nil {
 		// FIXME If reference is nil
 		left := getIdentifierReference(rt, rt.scope.lexical, node.name, false, at(node.idx))

@@ -409,6 +409,24 @@ func (p *parser) parseRegExpLiteral() *ast.RegExpLiteral {
 }
 
 func (p *parser) parseVariableDeclaration(declarationList *[]*ast.VariableExpression) ast.Expression {
+	// Destructuring binding: var/let/const [a, b] = ... or { a, b } = ...
+	if p.token == token.LEFT_BRACKET || p.token == token.LEFT_BRACE {
+		idx := p.idx
+		target := p.parseBindingTarget()
+		node := &ast.VariableExpression{
+			Idx:    idx,
+			Target: target,
+		}
+		if declarationList != nil {
+			*declarationList = append(*declarationList, node)
+		}
+		if p.token == token.ASSIGN {
+			p.next()
+			node.Initializer = p.parseAssignmentExpression()
+		}
+		return node
+	}
+
 	if p.token != token.IDENTIFIER {
 		idx := p.expect(token.IDENTIFIER)
 		p.nextStatement()
@@ -439,6 +457,177 @@ func (p *parser) parseVariableDeclaration(declarationList *[]*ast.VariableExpres
 	}
 
 	return node
+}
+
+// literalToPattern reinterprets an array or object literal that appears on the
+// left of a destructuring assignment as a binding pattern. It returns false if
+// the literal cannot be a valid assignment pattern.
+func literalToPattern(expr ast.Expression) (ast.Expression, bool) {
+	switch lit := expr.(type) {
+	case *ast.ArrayLiteral:
+		pattern := &ast.ArrayPattern{LeftBracket: lit.LeftBracket, RightBracket: lit.RightBracket}
+		for _, element := range lit.Value {
+			switch el := element.(type) {
+			case *ast.EmptyExpression:
+				pattern.Elements = append(pattern.Elements, nil)
+			case *ast.SpreadExpression:
+				target, ok := assignmentTarget(el.Value)
+				if !ok {
+					return nil, false
+				}
+				pattern.Rest = target
+			default:
+				target, ok := assignmentTarget(element)
+				if !ok {
+					return nil, false
+				}
+				pattern.Elements = append(pattern.Elements, target)
+			}
+		}
+		return pattern, true
+	case *ast.ObjectLiteral:
+		pattern := &ast.ObjectPattern{LeftBrace: lit.LeftBrace, RightBrace: lit.RightBrace}
+		for _, prop := range lit.Value {
+			if prop.Kind != "value" {
+				return nil, false
+			}
+			target, ok := assignmentTarget(prop.Value)
+			if !ok {
+				return nil, false
+			}
+			pattern.Properties = append(pattern.Properties, &ast.PatternProperty{
+				Key:           prop.Key,
+				KeyExpression: prop.KeyExpression,
+				Target:        target,
+			})
+		}
+		return pattern, true
+	}
+	return nil, false
+}
+
+// assignmentTarget validates and, where necessary, converts a single
+// destructuring assignment target. Identifiers and member expressions are
+// valid targets; nested literals become nested patterns; an AssignExpression
+// (target = default) keeps its shape with its left side converted.
+func assignmentTarget(expr ast.Expression) (ast.Expression, bool) {
+	switch e := expr.(type) {
+	case *ast.Identifier, *ast.DotExpression, *ast.BracketExpression:
+		return expr, true
+	case *ast.ArrayLiteral, *ast.ObjectLiteral:
+		return literalToPattern(expr)
+	case *ast.AssignExpression:
+		if e.Operator != token.ASSIGN {
+			return nil, false
+		}
+		left, ok := assignmentTarget(e.Left)
+		if !ok {
+			return nil, false
+		}
+		e.Left = left
+		return e, true
+	}
+	return nil, false
+}
+
+// parseBindingTarget parses a binding target: a plain identifier or a
+// destructuring pattern.
+func (p *parser) parseBindingTarget() ast.Expression {
+	switch p.token {
+	case token.LEFT_BRACKET:
+		return p.parseArrayBindingPattern()
+	case token.LEFT_BRACE:
+		return p.parseObjectBindingPattern()
+	case token.IDENTIFIER:
+		return p.parseIdentifier()
+	default:
+		idx := p.expect(token.IDENTIFIER)
+		return &ast.BadExpression{From: idx, To: p.idx}
+	}
+}
+
+// parseBindingTargetWithDefault parses a binding target optionally followed by
+// "= default", representing the default as an AssignExpression.
+func (p *parser) parseBindingTargetWithDefault() ast.Expression {
+	target := p.parseBindingTarget()
+	if p.token == token.ASSIGN {
+		p.next()
+		return &ast.AssignExpression{
+			Operator: token.ASSIGN,
+			Left:     target,
+			Right:    p.parseAssignmentExpression(),
+		}
+	}
+	return target
+}
+
+func (p *parser) parseArrayBindingPattern() ast.Expression {
+	opening := p.expect(token.LEFT_BRACKET)
+	pattern := &ast.ArrayPattern{LeftBracket: opening}
+	for p.token != token.RIGHT_BRACKET && p.token != token.EOF {
+		if p.token == token.COMMA {
+			pattern.Elements = append(pattern.Elements, nil) // elision
+			p.next()
+			continue
+		}
+		if p.token == token.ELLIPSIS {
+			p.next()
+			pattern.Rest = p.parseBindingTarget()
+			break
+		}
+		pattern.Elements = append(pattern.Elements, p.parseBindingTargetWithDefault())
+		if p.token != token.RIGHT_BRACKET {
+			p.expect(token.COMMA)
+		}
+	}
+	pattern.RightBracket = p.expect(token.RIGHT_BRACKET)
+	return pattern
+}
+
+func (p *parser) parseObjectBindingPattern() ast.Expression {
+	opening := p.expect(token.LEFT_BRACE)
+	pattern := &ast.ObjectPattern{LeftBrace: opening}
+	for p.token != token.RIGHT_BRACE && p.token != token.EOF {
+		if p.token == token.ELLIPSIS {
+			p.next()
+			pattern.Rest = p.parseBindingTarget()
+			break
+		}
+
+		prop := &ast.PatternProperty{}
+		if p.token == token.LEFT_BRACKET {
+			keyExpr, _ := p.parseComputedPropertyKey()
+			prop.KeyExpression = keyExpr
+			p.expect(token.COLON)
+			prop.Target = p.parseBindingTargetWithDefault()
+		} else {
+			keyIdx := p.idx
+			_, key := p.parseObjectPropertyKey()
+			prop.Key = key
+			if p.token == token.COLON {
+				p.next()
+				prop.Target = p.parseBindingTargetWithDefault()
+			} else {
+				// Shorthand: { a } or { a = default }.
+				var target ast.Expression = &ast.Identifier{Name: key, Idx: keyIdx}
+				if p.token == token.ASSIGN {
+					p.next()
+					target = &ast.AssignExpression{
+						Operator: token.ASSIGN,
+						Left:     target,
+						Right:    p.parseAssignmentExpression(),
+					}
+				}
+				prop.Target = target
+			}
+		}
+		pattern.Properties = append(pattern.Properties, prop)
+		if p.token != token.RIGHT_BRACE {
+			p.expect(token.COMMA)
+		}
+	}
+	pattern.RightBrace = p.expect(token.RIGHT_BRACE)
+	return pattern
 }
 
 func (p *parser) parseVariableDeclarationList(idx file.Idx) []ast.Expression {
@@ -1270,6 +1459,20 @@ func (p *parser) parseAssignmentExpression() ast.Expression {
 		p.next()
 		switch left.(type) {
 		case *ast.Identifier, *ast.DotExpression, *ast.BracketExpression:
+		case *ast.ArrayLiteral, *ast.ObjectLiteral:
+			// Destructuring assignment: reinterpret the literal as a pattern.
+			if operator != token.ASSIGN {
+				p.error(left.Idx0(), "invalid left-hand side in assignment")
+				p.nextStatement()
+				return &ast.BadExpression{From: idx, To: p.idx}
+			}
+			if pattern, ok := literalToPattern(left); ok {
+				left = pattern
+			} else {
+				p.error(left.Idx0(), "invalid destructuring assignment target")
+				p.nextStatement()
+				return &ast.BadExpression{From: idx, To: p.idx}
+			}
 		default:
 			p.error(left.Idx0(), "invalid left-hand side in assignment")
 			p.nextStatement()

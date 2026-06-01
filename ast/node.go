@@ -432,6 +432,53 @@ func (sl *StringLiteral) Idx1() file.Idx {
 // expression implements Expression.
 func (*StringLiteral) expression() {}
 
+// ArrayPattern represents an array destructuring pattern, e.g. [a, b = 1, ...rest].
+type ArrayPattern struct {
+	// Elements holds the element targets; a nil entry is an elision (hole).
+	// A target may be an Identifier, a nested pattern, or an AssignExpression
+	// (target = default).
+	Elements     []Expression
+	Rest         Expression // rest target (...name), or nil
+	LeftBracket  file.Idx
+	RightBracket file.Idx
+}
+
+// Idx0 implements Node.
+func (ap *ArrayPattern) Idx0() file.Idx { return ap.LeftBracket }
+
+// Idx1 implements Node.
+func (ap *ArrayPattern) Idx1() file.Idx { return ap.RightBracket + 1 }
+
+// expression implements Expression.
+func (*ArrayPattern) expression() {}
+
+// ObjectPattern represents an object destructuring pattern, e.g. {a, b: c = 1}.
+type ObjectPattern struct {
+	Properties []*PatternProperty
+	Rest       Expression // rest target (...name), or nil
+	LeftBrace  file.Idx
+	RightBrace file.Idx
+}
+
+// Idx0 implements Node.
+func (op *ObjectPattern) Idx0() file.Idx { return op.LeftBrace }
+
+// Idx1 implements Node.
+func (op *ObjectPattern) Idx1() file.Idx { return op.RightBrace + 1 }
+
+// expression implements Expression.
+func (*ObjectPattern) expression() {}
+
+// PatternProperty is a single property of an ObjectPattern.
+type PatternProperty struct {
+	// Key is the (static) source property name; KeyExpression, when non-nil,
+	// is a computed key evaluated at runtime.
+	Key           string
+	KeyExpression Expression
+	// Target is the binding target, possibly an AssignExpression for a default.
+	Target Expression
+}
+
 // SpreadExpression represents a spread element, e.g. ...arr in a call argument
 // list or array literal.
 type SpreadExpression struct {
@@ -527,6 +574,9 @@ type VariableExpression struct {
 	Initializer Expression
 	Name        string
 	Idx         file.Idx
+	// Target, when non-nil, is a destructuring binding pattern (ArrayPattern or
+	// ObjectPattern) used in place of a plain Name.
+	Target Expression
 }
 
 // Idx0 implements Node.
