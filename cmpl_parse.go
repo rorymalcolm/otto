@@ -103,6 +103,15 @@ func (cmpl *compiler) parseExpression(expr ast.Expression) nodeExpression {
 			for i, value := range list {
 				out.parameterList[i] = value.Name
 			}
+			if expr.ParameterList.Defaults != nil {
+				out.parameterDefaults = make([]nodeExpression, len(list))
+				for i, def := range expr.ParameterList.Defaults {
+					out.parameterDefaults[i] = cmpl.parseExpression(def)
+				}
+			}
+			if expr.ParameterList.Rest != nil {
+				out.restParameter = expr.ParameterList.Rest.Name
+			}
 		}
 		for _, value := range expr.DeclarationList {
 			switch value := value.(type) {
@@ -507,14 +516,16 @@ type (
 	}
 
 	nodeFunctionLiteral struct {
-		body          nodeStatement
-		file          *file.File
-		name          string
-		source        string
-		parameterList []string
-		varList       []string
-		functionList  []*nodeFunctionLiteral
-		isArrow       bool
+		body              nodeStatement
+		file              *file.File
+		name              string
+		source            string
+		parameterList     []string
+		parameterDefaults []nodeExpression // parallel to parameterList; nil if none
+		restParameter     string           // name of the rest parameter, or ""
+		varList           []string
+		functionList      []*nodeFunctionLiteral
+		isArrow           bool
 	}
 
 	nodeIdentifier struct {

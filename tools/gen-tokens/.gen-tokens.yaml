@@ -118,6 +118,8 @@ tokens:
     symbol: ","
   - name: PERIOD
     symbol: "."
+  - name: ELLIPSIS
+    symbol: "..."
 
   - group: Right operators
   - name: RIGHT_PARENTHESIS

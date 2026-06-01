@@ -60,8 +60,9 @@ func TestParseFile(t *testing.T) {
 		_, err = ParseFile(nil, "", `/(?!def)abc/; return`, IgnoreRegExpErrors)
 		is(err, "(anonymous): Line 1:15 Illegal return statement")
 
+		// `..` begins an (incomplete) ellipsis, so it lexes as an illegal token.
 		_, err = ParseFile(nil, "/make-sure-file-path-is-returned-not-anonymous", `a..`, 0)
-		is(err, "/make-sure-file-path-is-returned-not-anonymous: Line 1:3 Unexpected token .")
+		is(err, "/make-sure-file-path-is-returned-not-anonymous: Line 1:2 Unexpected token ILLEGAL (and 1 more errors)")
 	})
 }
 

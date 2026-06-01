@@ -245,6 +245,16 @@ func (p *parser) scan() (tkn token.Token, literal string, idx file.Idx) { //noli
 				if digitValue(p.chr) < 10 {
 					insertSemicolon = true
 					tkn, literal = p.scanNumericLiteral(true)
+				} else if p.chr == '.' {
+					// Could be the ... (ellipsis) of rest/spread syntax.
+					p.read() // second dot
+					if p.chr == '.' {
+						p.read() // third dot
+						tkn = token.ELLIPSIS
+					} else {
+						p.errorUnexpected(idx, '.')
+						tkn = token.ILLEGAL
+					}
 				} else {
 					tkn = token.PERIOD
 				}

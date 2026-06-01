@@ -351,7 +351,13 @@ func (*ObjectLiteral) expression() {}
 
 // ParameterList represents a parameter list.
 type ParameterList struct {
-	List    []*Identifier
+	List []*Identifier
+	// Defaults is parallel to List: Defaults[i], when non-nil, is the default
+	// value expression for parameter List[i].
+	Defaults []Expression
+	// Rest, when non-nil, is the name of a rest parameter (...name) which
+	// collects any trailing arguments into an array.
+	Rest    *Identifier
 	Opening file.Idx
 	Closing file.Idx
 }

@@ -70,6 +70,7 @@ const (
 	LEFT_BRACE       // {
 	COMMA            // ,
 	PERIOD           // .
+	ELLIPSIS         // ...
 	// Right operators.
 	RIGHT_PARENTHESIS // )
 	RIGHT_BRACKET     // ]
@@ -172,6 +173,7 @@ var token2string = [...]string{
 	LEFT_BRACE:                  "{",
 	COMMA:                       ",",
 	PERIOD:                      ".",
+	ELLIPSIS:                    "...",
 	RIGHT_PARENTHESIS:           ")",
 	RIGHT_BRACKET:               "]",
 	RIGHT_BRACE:                 "}",

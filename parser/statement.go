@@ -220,12 +220,25 @@ func (p *parser) parseFunctionParameterList() *ast.ParameterList {
 		p.comments.Unset()
 	}
 	var list []*ast.Identifier
+	var defaults []ast.Expression
+	hasDefault := false
 	for p.token != token.RIGHT_PARENTHESIS && p.token != token.EOF {
 		if p.token != token.IDENTIFIER {
 			p.expect(token.IDENTIFIER)
 		} else {
 			identifier := p.parseIdentifier()
 			list = append(list, identifier)
+
+			var def ast.Expression
+			if p.token == token.ASSIGN {
+				if p.mode&StoreComments != 0 {
+					p.comments.Unset()
+				}
+				p.next()
+				def = p.parseAssignmentExpression()
+				hasDefault = true
+			}
+			defaults = append(defaults, def)
 		}
 		if p.token != token.RIGHT_PARENTHESIS {
 			if p.mode&StoreComments != 0 {
@@ -236,11 +249,18 @@ func (p *parser) parseFunctionParameterList() *ast.ParameterList {
 	}
 	closing := p.expect(token.RIGHT_PARENTHESIS)
 
-	return &ast.ParameterList{
+	node := &ast.ParameterList{
 		Opening: opening,
 		List:    list,
 		Closing: closing,
 	}
+	// Only retain the defaults slice if at least one parameter has a default,
+	// keeping the common (default-free) case unchanged.
+	if hasDefault {
+		node.Defaults = defaults
+	}
+
+	return node
 }
 
 func (p *parser) parseFunctionStatement() *ast.FunctionStatement {
