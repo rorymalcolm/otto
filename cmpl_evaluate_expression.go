@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	goruntime "runtime"
+	"strings"
 
 	"github.com/robertkrimen/otto/token"
 )
@@ -92,6 +93,16 @@ func (rt *runtime) cmplEvaluateNodeExpression(node nodeExpression) Value {
 
 	case *nodeSequenceExpression:
 		return rt.cmplEvaluateNodeSequenceExpression(node)
+
+	case *nodeTemplateLiteral:
+		var b strings.Builder
+		for i, str := range node.strings {
+			b.WriteString(str)
+			if i < len(node.expressions) {
+				b.WriteString(rt.cmplEvaluateNodeExpression(node.expressions[i]).resolve().string())
+			}
+		}
+		return stringValue(b.String())
 
 	case *nodeThisExpression:
 		return objectValue(rt.scope.this)

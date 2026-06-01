@@ -348,6 +348,15 @@ func (p *parser) scan() (tkn token.Token, literal string, idx file.Idx) { //noli
 				if err != nil {
 					tkn = token.ILLEGAL
 				}
+			case '`':
+				insertSemicolon = true
+				tkn = token.TEMPLATE
+				var err error
+				literal, err = p.scanTemplate(p.chrOffset - 1)
+				if err != nil {
+					p.error(idx, err.Error())
+					tkn = token.ILLEGAL
+				}
 			default:
 				p.errorUnexpected(idx, chr)
 				tkn = token.ILLEGAL
@@ -637,6 +646,98 @@ newline:
 		p.error(p.idxOf(offset), err)
 	}
 	return "", errors.New(err)
+}
+
+// errInvalidTemplate is returned when a template literal is malformed.
+var errInvalidTemplate = errors.New("Unterminated template literal")
+
+// scanTemplate scans a template literal, beginning just after the opening
+// backtick, and returns its raw source including the enclosing backticks.
+// Substitutions (${ ... }) are scanned but not interpreted here; the parser
+// later splits the raw literal into cooked strings and embedded expressions.
+func (p *parser) scanTemplate(offset int) (string, error) {
+	for p.chr != '`' {
+		switch p.chr {
+		case -1:
+			return "", errors.New("Unterminated template literal")
+		case '\\':
+			p.read() // backslash
+			if p.chr >= 0 {
+				p.read() // escaped character
+			}
+		case '$':
+			p.read() // dollar
+			if p.chr == '{' {
+				p.read() // opening brace
+				if err := p.scanTemplateSubstitution(); err != nil {
+					return "", err
+				}
+			}
+		default:
+			p.read()
+		}
+	}
+
+	p.read() // closing backtick
+	return p.str[offset:p.chrOffset], nil
+}
+
+// scanTemplateSubstitution consumes the body of a ${ ... } substitution up to
+// and including its matching closing brace, skipping over nested braces, string
+// literals and nested template literals so that braces and backticks appearing
+// inside them do not prematurely terminate the substitution.
+func (p *parser) scanTemplateSubstitution() error {
+	depth := 1
+	for depth > 0 {
+		switch p.chr {
+		case -1:
+			return errors.New("Unterminated template literal")
+		case '{':
+			depth++
+			p.read()
+		case '}':
+			depth--
+			p.read()
+		case '`':
+			p.read() // opening backtick of a nested template
+			if _, err := p.scanTemplate(p.chrOffset - 1); err != nil {
+				return err
+			}
+		case '"', '\'':
+			if err := p.skipStringLiteral(p.chr); err != nil {
+				return err
+			}
+		case '\\':
+			p.read()
+			if p.chr >= 0 {
+				p.read()
+			}
+		default:
+			p.read()
+		}
+	}
+	return nil
+}
+
+// skipStringLiteral consumes a single- or double-quoted string literal,
+// beginning at its opening quote, used while scanning template substitutions.
+func (p *parser) skipStringLiteral(quote rune) error {
+	p.read() // opening quote
+	for p.chr != quote {
+		switch {
+		case p.chr < 0, p.chr == '\n', p.chr == '\r':
+			return errors.New("String not terminated")
+		case p.chr == '\\':
+			p.read()
+			if p.chr >= 0 {
+				p.read()
+			}
+		default:
+			p.read()
+		}
+	}
+	p.read() // closing quote
+	return nil
 }
 
 func (p *parser) scanNewline() {

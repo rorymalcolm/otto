@@ -423,6 +423,31 @@ func (sl *StringLiteral) Idx1() file.Idx {
 // expression implements Expression.
 func (*StringLiteral) expression() {}
 
+// TemplateLiteral represents a template literal, e.g. `abc${def}ghi`.
+//
+// Strings holds the cooked string segments and always contains exactly one
+// more element than Expressions; the final string is rendered by interleaving
+// the two: Strings[0] + Expressions[0] + Strings[1] + ... + Strings[n].
+type TemplateLiteral struct {
+	Strings     []string
+	Expressions []Expression
+	OpenQuote   file.Idx
+	CloseQuote  file.Idx
+}
+
+// Idx0 implements Node.
+func (tl *TemplateLiteral) Idx0() file.Idx {
+	return tl.OpenQuote
+}
+
+// Idx1 implements Node.
+func (tl *TemplateLiteral) Idx1() file.Idx {
+	return tl.CloseQuote + 1
+}
+
+// expression implements Expression.
+func (*TemplateLiteral) expression() {}
+
 // ThisExpression represents a this expression.
 type ThisExpression struct {
 	Idx file.Idx

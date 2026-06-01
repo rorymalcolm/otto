@@ -16,6 +16,7 @@ const (
 	NULL
 	NUMBER
 	IDENTIFIER
+	TEMPLATE
 	// Maths.
 	PLUS      // +
 	MINUS     // -
@@ -124,6 +125,7 @@ var token2string = [...]string{
 	NULL:                        "NULL",
 	NUMBER:                      "NUMBER",
 	IDENTIFIER:                  "IDENTIFIER",
+	TEMPLATE:                    "TEMPLATE",
 	PLUS:                        "+",
 	MINUS:                       "-",
 	MULTIPLY:                    "*",

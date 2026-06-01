@@ -172,6 +172,12 @@ func Walk(v Visitor, n Node) {
 			}
 		}
 	case *StringLiteral:
+	case *TemplateLiteral:
+		if n != nil {
+			for _, e := range n.Expressions {
+				Walk(v, e)
+			}
+		}
 	case *SwitchStatement:
 		if n != nil {
 			Walk(v, n.Discriminant)

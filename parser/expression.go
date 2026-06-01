@@ -2,6 +2,8 @@ package parser
 
 import (
 	"regexp"
+	"strconv"
+	"strings"
 
 	"github.com/robertkrimen/otto/ast"
 	"github.com/robertkrimen/otto/file"
@@ -82,6 +84,8 @@ func (p *parser) parsePrimaryExpression() ast.Expression {
 			Literal: literal,
 			Value:   value,
 		}
+	case token.TEMPLATE:
+		return p.parseTemplateLiteral(idx, literal)
 	case token.NUMBER:
 		p.next()
 		value, err := parseNumberLiteral(literal)
@@ -138,6 +142,218 @@ func (p *parser) parsePrimaryExpression() ast.Expression {
 	p.errorUnexpectedToken(p.token)
 	p.nextStatement()
 	return &ast.BadExpression{From: idx, To: p.idx}
+}
+
+// parseTemplateLiteral builds a TemplateLiteral node from the raw template
+// source (including the enclosing backticks). It splits the literal into cooked
+// string segments and embedded ${ ... } expressions, parsing each embedded
+// expression with a sub-parser.
+func (p *parser) parseTemplateLiteral(idx file.Idx, literal string) ast.Expression {
+	closeQuote := file.Idx(int(idx) + len(literal) - 1)
+	p.next()
+
+	node := &ast.TemplateLiteral{
+		OpenQuote:  idx,
+		CloseQuote: closeQuote,
+	}
+
+	// Strip the enclosing backticks.
+	inner := ""
+	if len(literal) >= 2 {
+		inner = literal[1 : len(literal)-1]
+	}
+
+	var cooked strings.Builder
+	i := 0
+	for i < len(inner) {
+		switch {
+		case inner[i] == '\\':
+			i = cookTemplateEscape(&cooked, inner, i+1)
+		case inner[i] == '$' && i+1 < len(inner) && inner[i+1] == '{':
+			node.Strings = append(node.Strings, cooked.String())
+			cooked.Reset()
+			src, next, err := extractTemplateSubstitution(inner, i+2)
+			if err != nil {
+				p.error(idx, err.Error())
+				return &ast.BadExpression{From: idx, To: closeQuote}
+			}
+			node.Expressions = append(node.Expressions, p.parseTemplateExpression(src, idx))
+			i = next
+		default:
+			cooked.WriteByte(inner[i])
+			i++
+		}
+	}
+	node.Strings = append(node.Strings, cooked.String())
+
+	return node
+}
+
+// parseTemplateExpression parses the source of a single ${ ... } substitution
+// into an expression using a sub-parser.
+func (p *parser) parseTemplateExpression(src string, idx file.Idx) ast.Expression {
+	if strings.TrimSpace(src) == "" {
+		p.error(idx, "unexpected token in template literal")
+		return &ast.BadExpression{From: idx, To: idx}
+	}
+
+	program, err := ParseFile(nil, "", "("+src+"\n)", 0)
+	if err != nil {
+		p.error(idx, "invalid template substitution: %s", err.Error())
+		return &ast.BadExpression{From: idx, To: idx}
+	}
+
+	stmt, ok := program.Body[0].(*ast.ExpressionStatement)
+	if !ok || stmt.Expression == nil {
+		p.error(idx, "invalid template substitution")
+		return &ast.BadExpression{From: idx, To: idx}
+	}
+
+	return stmt.Expression
+}
+
+// extractTemplateSubstitution returns the source of a ${ ... } substitution
+// beginning at start (just past the opening brace) and the index just past its
+// matching closing brace. Nested braces, string literals and nested template
+// literals are skipped so their contents do not terminate the substitution.
+func extractTemplateSubstitution(s string, start int) (string, int, error) {
+	depth := 1
+	i := start
+	for i < len(s) {
+		switch s[i] {
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return s[start:i], i + 1, nil
+			}
+		case '\\':
+			i++ // skip the escaped character
+		case '`':
+			j, err := skipNestedTemplate(s, i+1)
+			if err != nil {
+				return "", 0, err
+			}
+			i = j
+			continue
+		case '\'', '"':
+			j, err := skipNestedString(s, i)
+			if err != nil {
+				return "", 0, err
+			}
+			i = j
+			continue
+		}
+		i++
+	}
+	return "", 0, errInvalidTemplate
+}
+
+// skipNestedTemplate returns the index just past the closing backtick of a
+// template literal whose body begins at i.
+func skipNestedTemplate(s string, i int) (int, error) {
+	for i < len(s) {
+		switch s[i] {
+		case '`':
+			return i + 1, nil
+		case '\\':
+			i++
+		case '$':
+			if i+1 < len(s) && s[i+1] == '{' {
+				j, err := extractNestedSubstitution(s, i+2)
+				if err != nil {
+					return 0, err
+				}
+				i = j
+				continue
+			}
+		}
+		i++
+	}
+	return 0, errInvalidTemplate
+}
+
+// extractNestedSubstitution is like extractTemplateSubstitution but returns
+// only the index past the closing brace.
+func extractNestedSubstitution(s string, start int) (int, error) {
+	_, next, err := extractTemplateSubstitution(s, start)
+	return next, err
+}
+
+// skipNestedString returns the index just past the closing quote of a string
+// literal whose opening quote is at i.
+func skipNestedString(s string, i int) (int, error) {
+	quote := s[i]
+	i++
+	for i < len(s) {
+		switch s[i] {
+		case quote:
+			return i + 1, nil
+		case '\\':
+			i++
+		}
+		i++
+	}
+	return 0, errInvalidTemplate
+}
+
+// cookTemplateEscape interprets the escape sequence whose character follows the
+// backslash at s[i], writing the cooked result to b, and returns the index just
+// past the consumed escape.
+func cookTemplateEscape(b *strings.Builder, s string, i int) int {
+	if i >= len(s) {
+		return i
+	}
+	switch c := s[i]; c {
+	case 'n':
+		b.WriteByte('\n')
+	case 'r':
+		b.WriteByte('\r')
+	case 't':
+		b.WriteByte('\t')
+	case 'b':
+		b.WriteByte('\b')
+	case 'f':
+		b.WriteByte('\f')
+	case 'v':
+		b.WriteByte('\v')
+	case '0':
+		b.WriteByte(0)
+	case 'x':
+		if i+3 <= len(s) {
+			if v, err := strconv.ParseUint(s[i+1:i+3], 16, 32); err == nil {
+				b.WriteRune(rune(v))
+				return i + 3
+			}
+		}
+		b.WriteByte(c)
+	case 'u':
+		if i+1 < len(s) && s[i+1] == '{' {
+			if end := strings.IndexByte(s[i+2:], '}'); end >= 0 {
+				if v, err := strconv.ParseUint(s[i+2:i+2+end], 16, 32); err == nil {
+					b.WriteRune(rune(v))
+					return i + 2 + end + 1
+				}
+			}
+		} else if i+5 <= len(s) {
+			if v, err := strconv.ParseUint(s[i+1:i+5], 16, 32); err == nil {
+				b.WriteRune(rune(v))
+				return i + 5
+			}
+		}
+		b.WriteByte(c)
+	case '\n':
+		return i + 1 // line continuation
+	case '\r':
+		if i+1 < len(s) && s[i+1] == '\n' {
+			return i + 2
+		}
+		return i + 1
+	default:
+		b.WriteByte(c)
+	}
+	return i + 1
 }
 
 func (p *parser) parseRegExpLiteral() *ast.RegExpLiteral {

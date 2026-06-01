@@ -11,6 +11,7 @@ tokens:
   - name: "NULL"
   - name: NUMBER
   - name: IDENTIFIER
+  - name: TEMPLATE
 
   - group: Maths
   - name: PLUS
