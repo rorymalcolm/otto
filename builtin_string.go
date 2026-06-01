@@ -42,6 +42,29 @@ func builtinStringFromCharCode(call FunctionCall) Value {
 	return string16Value(chrList)
 }
 
+func builtinStringRaw(call FunctionCall) Value {
+	template := call.Argument(0)
+	if !template.IsObject() {
+		return stringValue("")
+	}
+	raw := template.object().get("raw")
+	if !raw.IsObject() {
+		return stringValue("")
+	}
+	rawObject := raw.object()
+	length := int64(toUint32(rawObject.get(propertyLength)))
+
+	var b strings.Builder
+	for i := range length {
+		b.WriteString(rawObject.get(arrayIndexToString(i)).string())
+		// Interleave the substitution that follows each segment but the last.
+		if i+1 < length && int(i)+1 < len(call.ArgumentList) {
+			b.WriteString(call.ArgumentList[i+1].string())
+		}
+	}
+	return stringValue(b.String())
+}
+
 func builtinStringCharAt(call FunctionCall) Value {
 	checkObjectCoercible(call.runtime, call.This)
 	idx := int(call.Argument(0).number().int64)

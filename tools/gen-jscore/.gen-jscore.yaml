@@ -152,6 +152,8 @@ types:
         value: rt.global.StringPrototype
       - name: fromCharCode
         function: 1
+      - name: raw
+        function: 1
     prototype:
       objectClass: String
       prototype: Object

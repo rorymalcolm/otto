@@ -3026,11 +3026,49 @@ func (rt *runtime) newContext() {
 					},
 				},
 			},
+			"raw": {
+				mode: 0o101,
+				value: Value{
+					kind: valueObject,
+					value: &object{
+						runtime:     rt,
+						class:       classFunctionName,
+						objectClass: classObject,
+						prototype:   rt.global.FunctionPrototype,
+						extensible:  true,
+						property: map[string]property{
+							propertyLength: {
+								mode: 0,
+								value: Value{
+									kind:  valueNumber,
+									value: 1,
+								},
+							},
+							propertyName: {
+								mode: 0,
+								value: Value{
+									kind:  valueString,
+									value: "raw",
+								},
+							},
+						},
+						propertyOrder: []string{
+							propertyLength,
+							propertyName,
+						},
+						value: nativeFunctionObject{
+							name: "raw",
+							call: builtinStringRaw,
+						},
+					},
+				},
+			},
 		},
 		propertyOrder: []string{
 			propertyLength,
 			propertyPrototype,
 			"fromCharCode",
+			"raw",
 		},
 	}
 
