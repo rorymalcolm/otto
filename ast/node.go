@@ -737,6 +737,9 @@ type ForInStatement struct {
 	// Lexical is token.LET or token.CONST when Into declares a block-scoped
 	// loop variable.
 	Lexical token.Token
+	// Of distinguishes a for-of loop (iterating values) from a for-in loop
+	// (iterating keys).
+	Of bool
 }
 
 // Idx0 implements Node.

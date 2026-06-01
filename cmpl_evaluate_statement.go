@@ -230,6 +230,10 @@ func (rt *runtime) cmplEvaluateNodeForInStatement(node *nodeForInStatement) Valu
 	labels := append(rt.labels, "") //nolint:gocritic
 	rt.labels = nil
 
+	if node.of {
+		return rt.cmplEvaluateNodeForOfStatement(node)
+	}
+
 	source := rt.cmplEvaluateNodeExpression(node.source)
 	sourceValue := source.resolve()
 
@@ -297,6 +301,74 @@ func (rt *runtime) cmplEvaluateNodeForInStatement(node *nodeForInStatement) Valu
 		obj = obj.prototype
 		if !enumerateValue.isEmpty() {
 			result = enumerateValue
+		}
+	}
+	return result
+}
+
+// cmplEvaluateNodeForOfStatement evaluates a for-of loop, iterating the values
+// of an iterable. Arrays, strings and array-like objects are supported. A
+// block-scoped loop variable (for (let x of ...)) gets a fresh binding per
+// iteration.
+func (rt *runtime) cmplEvaluateNodeForOfStatement(node *nodeForInStatement) Value {
+	labels := append(rt.labels, "") //nolint:gocritic
+	rt.labels = nil
+
+	sourceValue := rt.cmplEvaluateNodeExpression(node.source).resolve()
+	switch sourceValue.kind {
+	case valueUndefined, valueNull:
+		panic(rt.panicTypeError("%v is not iterable", sourceValue))
+	}
+	values := rt.spreadIterable(sourceValue)
+
+	into := node.into
+	body := node.body
+
+	lexical := node.lexicalBinding != ""
+	var outerLexical stasher
+	if lexical {
+		outerLexical = rt.scope.lexical
+		defer func() { rt.scope.lexical = outerLexical }()
+	}
+
+	result := emptyValue
+forLoop:
+	for _, iterationValue := range values {
+		if lexical && node.immutable {
+			// A const binding is initialised directly with the iteration value.
+			iterEnv := rt.newDeclarationStash(outerLexical)
+			iterEnv.createImmutableBinding(node.lexicalBinding, iterationValue)
+			rt.scope.lexical = iterEnv
+		} else {
+			if lexical {
+				iterEnv := rt.newDeclarationStash(outerLexical)
+				iterEnv.createBinding(node.lexicalBinding, false, Value{})
+				rt.scope.lexical = iterEnv
+			}
+			ref := rt.cmplEvaluateNodeExpression(into)
+			if ref.reference() == nil {
+				identifier := ref.string()
+				ref = toValue(getIdentifierReference(rt, rt.scope.lexical, identifier, false, -1))
+			}
+			rt.putValue(ref.reference(), iterationValue)
+		}
+
+		for _, n := range body {
+			value := rt.cmplEvaluateNodeStatement(n)
+			switch value.kind {
+			case valueResult:
+				switch value.evaluateBreakContinue(labels) {
+				case resultReturn:
+					return value
+				case resultBreak:
+					break forLoop
+				case resultContinue:
+					continue forLoop
+				}
+			case valueEmpty:
+			default:
+				result = value
+			}
 		}
 	}
 	return result

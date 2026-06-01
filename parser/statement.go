@@ -610,6 +610,12 @@ func (p *parser) parseIterationStatement() ast.Statement {
 	return p.parseStatement()
 }
 
+// isForOf reports whether the current token is the contextual keyword "of",
+// used to recognise a for-of loop.
+func (p *parser) isForOf() bool {
+	return p.token == token.IDENTIFIER && p.literal == "of"
+}
+
 func (p *parser) parseForIn(into ast.Expression) *ast.ForInStatement {
 	// Already have consumed "<into> in"
 
@@ -670,6 +676,7 @@ func (p *parser) parseForOrForInStatement() ast.Statement {
 	var left []ast.Expression
 
 	forIn := false
+	forOf := false
 	var lexicalKind token.Token
 	if p.token != token.SEMICOLON {
 		allowIn := p.scope.allowIn
@@ -690,11 +697,12 @@ func (p *parser) parseForOrForInStatement() ast.Statement {
 				lexicalKind = kind
 				list = p.parseLexicalBindingList()
 			}
-			if len(list) == 1 && p.token == token.IN {
+			if len(list) == 1 && (p.token == token.IN || p.isForOf()) {
 				if p.mode&StoreComments != 0 {
 					p.comments.Unset()
 				}
-				p.next() // in
+				forOf = p.isForOf()
+				p.next() // in or of
 				forIn = true
 				left = []ast.Expression{list[0]} // There is only one declaration
 			} else {
@@ -705,7 +713,8 @@ func (p *parser) parseForOrForInStatement() ast.Statement {
 			}
 		} else {
 			left = append(left, p.parseExpression())
-			if p.token == token.IN {
+			if p.token == token.IN || p.isForOf() {
+				forOf = p.isForOf()
 				p.next()
 				forIn = true
 			}
@@ -726,6 +735,7 @@ func (p *parser) parseForOrForInStatement() ast.Statement {
 		forin := p.parseForIn(left[0])
 		forin.For = idx
 		forin.Lexical = lexicalKind
+		forin.Of = forOf
 		if p.mode&StoreComments != 0 {
 			p.comments.CommentMap.AddComments(forin, comments, ast.LEADING)
 			p.comments.CommentMap.AddComments(forin, forComments, ast.FOR)

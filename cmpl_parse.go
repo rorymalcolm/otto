@@ -325,6 +325,7 @@ func (cmpl *compiler) parseStatement(stmt ast.Statement) nodeStatement {
 			into:   cmpl.parseExpression(stmt.Into),
 			source: cmpl.parseExpression(stmt.Source),
 		}
+		out.of = stmt.Of
 		if stmt.Lexical != 0 {
 			out.immutable = stmt.Lexical == token.CONST
 			if ve, ok := stmt.Into.(*ast.VariableExpression); ok {
@@ -647,6 +648,7 @@ type (
 		body           []nodeStatement
 		lexicalBinding string // name of a let/const loop binding, if any
 		immutable      bool
+		of             bool // for-of (iterate values) rather than for-in (keys)
 	}
 
 	nodeForStatement struct {
