@@ -164,7 +164,7 @@ func (rt *runtime) spreadIterable(value Value) []Value {
 		obj := value.object()
 		length := int64(toUint32(obj.get(propertyLength)))
 		out := make([]Value, 0, length)
-		for i := int64(0); i < length; i++ {
+		for i := range length {
 			out = append(out, obj.get(arrayIndexToString(i)))
 		}
 		return out
@@ -259,7 +259,7 @@ func (rt *runtime) cmplEvaluateNodeCallExpression(node *nodeCallExpression, with
 	this := Value{}
 	callee := rt.cmplEvaluateNodeExpression(node.callee)
 
-	argumentList := []Value{}
+	var argumentList []Value
 	if withArgumentList != nil {
 		argumentList = rt.toValueArray(withArgumentList...)
 	} else {

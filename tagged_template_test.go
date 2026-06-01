@@ -13,13 +13,13 @@ func TestTaggedTemplate(t *testing.T) {
             function tag(strings, ...values) {
                 return strings.join("|") + "#" + values.join(",");
             }
-            tag` + "`a${1}b${2}c`" + `;
+            tag`+"`a${1}b${2}c`"+`;
         `, "a|b|c#1,2")
 
 		// strings always has one more element than values.
 		test(`
             function tag(strings, ...values) { return strings.length + ":" + values.length; }
-            tag` + "`${1}${2}${3}`" + `;
+            tag`+"`${1}${2}${3}`"+`;
         `, "4:3")
 
 		// Cooked vs raw strings.

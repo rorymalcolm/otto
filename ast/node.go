@@ -351,29 +351,20 @@ func (*ObjectLiteral) expression() {}
 
 // ParameterList represents a parameter list.
 type ParameterList struct {
-	List []*Identifier
-	// Defaults is parallel to List: Defaults[i], when non-nil, is the default
-	// value expression for parameter List[i].
+	Rest     *Identifier
+	List     []*Identifier
 	Defaults []Expression
-	// Targets is parallel to List: Targets[i], when non-nil, is a destructuring
-	// pattern (ArrayPattern or ObjectPattern) bound by parameter i, in which
-	// case List[i] is a placeholder.
-	Targets []Expression
-	// Rest, when non-nil, is the name of a rest parameter (...name) which
-	// collects any trailing arguments into an array.
-	Rest    *Identifier
-	Opening file.Idx
-	Closing file.Idx
+	Targets  []Expression
+	Opening  file.Idx
+	Closing  file.Idx
 }
 
 // Property represents a property.
 type Property struct {
-	Value Expression
-	Key   string
-	Kind  string
-	// KeyExpression holds the key of a computed property, e.g. {[expr]: v}.
-	// When non-nil it is evaluated at runtime and Key is ignored.
+	Value         Expression
 	KeyExpression Expression
+	Key           string
+	Kind          string
 }
 
 // RegExpLiteral represents a regular expression literal.
@@ -438,11 +429,8 @@ func (*StringLiteral) expression() {}
 
 // ArrayPattern represents an array destructuring pattern, e.g. [a, b = 1, ...rest].
 type ArrayPattern struct {
-	// Elements holds the element targets; a nil entry is an elision (hole).
-	// A target may be an Identifier, a nested pattern, or an AssignExpression
-	// (target = default).
+	Rest         Expression
 	Elements     []Expression
-	Rest         Expression // rest target (...name), or nil
 	LeftBracket  file.Idx
 	RightBracket file.Idx
 }
@@ -458,8 +446,8 @@ func (*ArrayPattern) expression() {}
 
 // ObjectPattern represents an object destructuring pattern, e.g. {a, b: c = 1}.
 type ObjectPattern struct {
+	Rest       Expression
 	Properties []*PatternProperty
-	Rest       Expression // rest target (...name), or nil
 	LeftBrace  file.Idx
 	RightBrace file.Idx
 }
@@ -475,20 +463,17 @@ func (*ObjectPattern) expression() {}
 
 // PatternProperty is a single property of an ObjectPattern.
 type PatternProperty struct {
-	// Key is the (static) source property name; KeyExpression, when non-nil,
-	// is a computed key evaluated at runtime.
-	Key           string
 	KeyExpression Expression
-	// Target is the binding target, possibly an AssignExpression for a default.
-	Target Expression
+	Target        Expression
+	Key           string
 }
 
 // ClassLiteral represents a class definition (declaration or expression).
 type ClassLiteral struct {
+	SuperClass Expression
 	Name       *Identifier
-	SuperClass Expression // the extends clause, or nil
-	Body       []*ClassElement
 	Source     string
+	Body       []*ClassElement
 	Class      file.Idx
 	RightBrace file.Idx
 }
@@ -507,12 +492,11 @@ func (*ClassLiteral) statement() {}
 
 // ClassElement is a single member of a class body.
 type ClassElement struct {
-	// Kind is "method", "get", "set" or "constructor".
-	Kind          string
-	Static        bool
-	Key           string
-	KeyExpression Expression // computed key, or nil
+	KeyExpression Expression
 	Method        *FunctionLiteral
+	Kind          string
+	Key           string
+	Static        bool
 }
 
 // TaggedTemplateExpression represents a tagged template, e.g. tag`a${b}c`.
@@ -638,11 +622,9 @@ func (*UnaryExpression) expression() {}
 // VariableExpression represents a variable expression.
 type VariableExpression struct {
 	Initializer Expression
+	Target      Expression
 	Name        string
 	Idx         file.Idx
-	// Target, when non-nil, is a destructuring binding pattern (ArrayPattern or
-	// ObjectPattern) used in place of a plain Name.
-	Target Expression
 }
 
 // Idx0 implements Node.

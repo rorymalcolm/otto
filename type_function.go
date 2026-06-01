@@ -114,16 +114,10 @@ func (fn bindFunctionObject) construct(argumentList []Value) Value {
 
 // nodeFunctionObject.
 type nodeFunctionObject struct {
-	node  *nodeFunctionLiteral
-	stash stasher
-	// this holds the lexically captured `this` for arrow functions. It is
-	// only meaningful when node.isArrow is true.
-	this Value
-	// homeObject is the object a class/method was defined on, used to resolve
-	// `super` references. It is nil for ordinary functions.
-	homeObject *object
-	// defaultDerivedCtor marks a synthesised default constructor of a derived
-	// class, which forwards its arguments to the super constructor.
+	stash              stasher
+	node               *nodeFunctionLiteral
+	homeObject         *object
+	this               Value
 	defaultDerivedCtor bool
 }
 

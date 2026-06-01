@@ -132,10 +132,12 @@ func (rt *runtime) defineClassAccessor(target *object, key string, fn *object, i
 // method or constructor, used to resolve `super`.
 func (rt *runtime) currentHomeObject() *object {
 	for sc := rt.scope; sc != nil; sc = sc.outer {
-		if obj, ok := sc.frame.fn.(*object); ok {
-			if fn, ok := obj.value.(nodeFunctionObject); ok && fn.homeObject != nil {
-				return fn.homeObject
-			}
+		obj, ok := sc.frame.fn.(*object)
+		if !ok {
+			continue
+		}
+		if fn, isNode := obj.value.(nodeFunctionObject); isNode && fn.homeObject != nil {
+			return fn.homeObject
 		}
 	}
 	return nil

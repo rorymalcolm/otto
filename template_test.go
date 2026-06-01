@@ -17,7 +17,7 @@ func TestTemplateLiteral(t *testing.T) {
 		// Single substitution.
 		test(`
             var name = "world";
-            ` + "`hello ${name}`" + `;
+            `+"`hello ${name}`"+`;
         `, "hello world")
 
 		// Expressions in substitutions.
@@ -46,7 +46,7 @@ func TestTemplateLiteral_expressions(t *testing.T) {
 		// A ternary inside a substitution.
 		test(`
             var x = 5;
-            ` + "`${x > 3 ? \"big\" : \"small\"}`" + `;
+            `+"`${x > 3 ? \"big\" : \"small\"}`"+`;
         `, "big")
 
 		// An object's toString is invoked (ToString semantics).

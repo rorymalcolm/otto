@@ -678,9 +678,9 @@ type (
 
 	nodeProperty struct {
 		value         nodeExpression
+		keyExpression nodeExpression
 		key           string
 		kind          string
-		keyExpression nodeExpression
 	}
 
 	nodeRegExpLiteral struct {
@@ -697,36 +697,36 @@ type (
 	}
 
 	nodeArrayPattern struct {
-		elements []nodeExpression // nil entry = elision (hole)
 		rest     nodeExpression
+		elements []nodeExpression
 	}
 
 	nodeSuperExpression struct{}
 
 	nodeClassLiteral struct {
-		name       string
 		superClass nodeExpression
-		elements   []nodeClassElement
+		name       string
 		source     string
+		elements   []nodeClassElement
 	}
 
 	nodeClassElement struct {
-		kind    string // "method", "get", "set", "constructor"
-		static  bool
-		key     string
 		keyExpr nodeExpression
 		method  *nodeFunctionLiteral
+		kind    string
+		key     string
+		static  bool
 	}
 
 	nodeObjectPattern struct {
-		properties []nodeObjectPatternProperty
 		rest       nodeExpression
+		properties []nodeObjectPatternProperty
 	}
 
 	nodeObjectPatternProperty struct {
-		key     string
 		keyExpr nodeExpression
 		target  nodeExpression
+		key     string
 	}
 
 	nodeTaggedTemplate struct {
@@ -751,9 +751,9 @@ type (
 
 	nodeVariableExpression struct {
 		initializer nodeExpression
+		target      nodeExpression
 		name        string
 		idx         file.Idx
-		target      nodeExpression // destructuring pattern, when name is empty
 	}
 )
 
@@ -774,15 +774,15 @@ type (
 	}
 
 	nodeClassStatement struct {
-		name  string
 		class *nodeClassLiteral
+		name  string
 	}
 
 	nodeLexicalBinding struct {
-		name        string
 		initializer nodeExpression
+		target      nodeExpression
+		name        string
 		hasValue    bool
-		target      nodeExpression // destructuring pattern, when name is empty
 	}
 
 	nodeBranchStatement struct {
@@ -816,11 +816,11 @@ type (
 	nodeForInStatement struct {
 		into           nodeExpression
 		source         nodeExpression
+		lexicalBinding string
 		body           []nodeStatement
-		lexicalBinding string // name of a let/const loop binding, if any
-		lexical        bool   // the loop variable is a let/const binding
-		immutable      bool   // const loop variable
-		of             bool   // for-of (iterate values) rather than for-in (keys)
+		lexical        bool
+		immutable      bool
+		of             bool
 	}
 
 	nodeForStatement struct {

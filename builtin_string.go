@@ -55,7 +55,7 @@ func builtinStringRaw(call FunctionCall) Value {
 	length := int64(toUint32(rawObject.get(propertyLength)))
 
 	var b strings.Builder
-	for i := int64(0); i < length; i++ {
+	for i := range length {
 		b.WriteString(rawObject.get(arrayIndexToString(i)).string())
 		// Interleave the substitution that follows each segment but the last.
 		if i+1 < length && int(i)+1 < len(call.ArgumentList) {

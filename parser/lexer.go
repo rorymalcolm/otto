@@ -242,10 +242,11 @@ func (p *parser) scan() (tkn token.Token, literal string, idx file.Idx) { //noli
 			case ':':
 				tkn = token.COLON
 			case '.':
-				if digitValue(p.chr) < 10 {
+				switch {
+				case digitValue(p.chr) < 10:
 					insertSemicolon = true
 					tkn, literal = p.scanNumericLiteral(true)
-				} else if p.chr == '.' {
+				case p.chr == '.':
 					// Could be the ... (ellipsis) of rest/spread syntax.
 					p.read() // second dot
 					if p.chr == '.' {
@@ -255,7 +256,7 @@ func (p *parser) scan() (tkn token.Token, literal string, idx file.Idx) { //noli
 						p.errorUnexpected(idx, '.')
 						tkn = token.ILLEGAL
 					}
-				} else {
+				default:
 					tkn = token.PERIOD
 				}
 			case ',':
@@ -659,7 +660,7 @@ newline:
 }
 
 // errInvalidTemplate is returned when a template literal is malformed.
-var errInvalidTemplate = errors.New("Unterminated template literal")
+var errInvalidTemplate = errors.New("unterminated template literal")
 
 // scanTemplate scans a template literal, beginning just after the opening
 // backtick, and returns its raw source including the enclosing backticks.
@@ -669,7 +670,7 @@ func (p *parser) scanTemplate(offset int) (string, error) {
 	for p.chr != '`' {
 		switch p.chr {
 		case -1:
-			return "", errors.New("Unterminated template literal")
+			return "", errors.New("unterminated template literal")
 		case '\\':
 			p.read() // backslash
 			if p.chr >= 0 {
@@ -701,7 +702,7 @@ func (p *parser) scanTemplateSubstitution() error {
 	for depth > 0 {
 		switch p.chr {
 		case -1:
-			return errors.New("Unterminated template literal")
+			return errors.New("unterminated template literal")
 		case '{':
 			depth++
 			p.read()
@@ -736,7 +737,7 @@ func (p *parser) skipStringLiteral(quote rune) error {
 	for p.chr != quote {
 		switch {
 		case p.chr < 0, p.chr == '\n', p.chr == '\r':
-			return errors.New("String not terminated")
+			return errors.New("string not terminated")
 		case p.chr == '\\':
 			p.read()
 			if p.chr >= 0 {
