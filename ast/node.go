@@ -511,6 +511,21 @@ type ClassElement struct {
 	Method        *FunctionLiteral
 }
 
+// TaggedTemplateExpression represents a tagged template, e.g. tag`a${b}c`.
+type TaggedTemplateExpression struct {
+	Tag      Expression
+	Template *TemplateLiteral
+}
+
+// Idx0 implements Node.
+func (tte *TaggedTemplateExpression) Idx0() file.Idx { return tte.Tag.Idx0() }
+
+// Idx1 implements Node.
+func (tte *TaggedTemplateExpression) Idx1() file.Idx { return tte.Template.Idx1() }
+
+// expression implements Expression.
+func (*TaggedTemplateExpression) expression() {}
+
 // SuperExpression represents the `super` keyword.
 type SuperExpression struct {
 	Idx file.Idx
@@ -552,6 +567,7 @@ func (*SpreadExpression) expression() {}
 // the two: Strings[0] + Expressions[0] + Strings[1] + ... + Strings[n].
 type TemplateLiteral struct {
 	Strings     []string
+	Raw         []string // raw (un-cooked) string segments, parallel to Strings
 	Expressions []Expression
 	OpenQuote   file.Idx
 	CloseQuote  file.Idx

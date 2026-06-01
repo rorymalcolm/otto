@@ -207,6 +207,18 @@ func (cmpl *compiler) parseExpression(expr ast.Expression) nodeExpression {
 	case *ast.SuperExpression:
 		return &nodeSuperExpression{}
 
+	case *ast.TaggedTemplateExpression:
+		out := &nodeTaggedTemplate{
+			tag:         cmpl.parseExpression(expr.Tag),
+			quasis:      expr.Template.Strings,
+			raw:         expr.Template.Raw,
+			expressions: make([]nodeExpression, len(expr.Template.Expressions)),
+		}
+		for i, value := range expr.Template.Expressions {
+			out.expressions[i] = cmpl.parseExpression(value)
+		}
+		return out
+
 	case *ast.ClassLiteral:
 		return cmpl.parseClassLiteral(expr)
 
@@ -710,6 +722,13 @@ type (
 		target  nodeExpression
 	}
 
+	nodeTaggedTemplate struct {
+		tag         nodeExpression
+		quasis      []string
+		raw         []string
+		expressions []nodeExpression
+	}
+
 	nodeTemplateLiteral struct {
 		strings     []string
 		expressions []nodeExpression
@@ -868,6 +887,7 @@ func (*nodeObjectLiteral) expressionNode()         {}
 func (*nodeRegExpLiteral) expressionNode()         {}
 func (*nodeSequenceExpression) expressionNode()    {}
 func (*nodeSpreadExpression) expressionNode()      {}
+func (*nodeTaggedTemplate) expressionNode()        {}
 func (*nodeArrayPattern) expressionNode()          {}
 func (*nodeObjectPattern) expressionNode()         {}
 func (*nodeSuperExpression) expressionNode()       {}

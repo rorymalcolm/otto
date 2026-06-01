@@ -112,6 +112,9 @@ func (rt *runtime) cmplEvaluateNodeExpression(node nodeExpression) Value {
 		// which are handled by the call and member evaluators.
 		panic(rt.panicSyntaxError("'super' keyword unexpected here"))
 
+	case *nodeTaggedTemplate:
+		return rt.cmplEvaluateNodeTaggedTemplate(node)
+
 	case *nodeThisExpression:
 		return objectValue(rt.scope.this)
 
@@ -317,6 +320,40 @@ func (rt *runtime) cmplEvaluateNodeConditionalExpression(node *nodeConditionalEx
 		return rt.cmplEvaluateNodeExpression(node.consequent)
 	}
 	return rt.cmplEvaluateNodeExpression(node.alternate)
+}
+
+func (rt *runtime) cmplEvaluateNodeTaggedTemplate(node *nodeTaggedTemplate) Value {
+	tag := rt.cmplEvaluateNodeExpression(node.tag)
+
+	// A tag of the form obj.fn`...` is called with `this` = obj.
+	this := Value{}
+	if rf, ok := tag.reference().(*propertyReference); ok && rf != nil {
+		this = objectValue(rf.base)
+	}
+
+	fn := tag.resolve()
+	if !fn.IsFunction() {
+		panic(rt.panicTypeError("Tagged template tag is not a function"))
+	}
+
+	// Build the strings array, carrying the raw segments on its `raw` property.
+	cooked := make([]Value, len(node.quasis))
+	for i, s := range node.quasis {
+		cooked[i] = stringValue(s)
+	}
+	stringsArray := rt.newArrayOf(cooked)
+	raw := make([]Value, len(node.raw))
+	for i, s := range node.raw {
+		raw[i] = stringValue(s)
+	}
+	stringsArray.defineProperty("raw", objectValue(rt.newArrayOf(raw)), 0o000, false)
+
+	argumentList := []Value{objectValue(stringsArray)}
+	for _, expr := range node.expressions {
+		argumentList = append(argumentList, rt.cmplEvaluateNodeExpression(expr).resolve())
+	}
+
+	return fn.object().call(this, argumentList, false, frame{})
 }
 
 func (rt *runtime) cmplEvaluateNodeDotExpression(node *nodeDotExpression) Value {

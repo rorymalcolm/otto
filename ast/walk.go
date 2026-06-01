@@ -198,6 +198,11 @@ func Walk(v Visitor, n Node) {
 				Walk(v, e)
 			}
 		}
+	case *TaggedTemplateExpression:
+		if n != nil {
+			Walk(v, n.Tag)
+			Walk(v, n.Template)
+		}
 	case *SwitchStatement:
 		if n != nil {
 			Walk(v, n.Discriminant)

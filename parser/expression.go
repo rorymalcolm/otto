@@ -169,6 +169,7 @@ func (p *parser) parseTemplateLiteral(idx file.Idx, literal string) ast.Expressi
 	}
 
 	var cooked strings.Builder
+	rawStart := 0
 	i := 0
 	for i < len(inner) {
 		switch {
@@ -176,6 +177,7 @@ func (p *parser) parseTemplateLiteral(idx file.Idx, literal string) ast.Expressi
 			i = cookTemplateEscape(&cooked, inner, i+1)
 		case inner[i] == '$' && i+1 < len(inner) && inner[i+1] == '{':
 			node.Strings = append(node.Strings, cooked.String())
+			node.Raw = append(node.Raw, inner[rawStart:i])
 			cooked.Reset()
 			src, next, err := extractTemplateSubstitution(inner, i+2)
 			if err != nil {
@@ -184,12 +186,14 @@ func (p *parser) parseTemplateLiteral(idx file.Idx, literal string) ast.Expressi
 			}
 			node.Expressions = append(node.Expressions, p.parseTemplateExpression(src, idx))
 			i = next
+			rawStart = next
 		default:
 			cooked.WriteByte(inner[i])
 			i++
 		}
 	}
 	node.Strings = append(node.Strings, cooked.String())
+	node.Raw = append(node.Raw, inner[rawStart:])
 
 	return node
 }
@@ -1014,9 +1018,26 @@ func (p *parser) parseLeftHandSideExpression() ast.Expression {
 			left = p.parseDotMember(left)
 		case token.LEFT_BRACKET:
 			left = p.parseBracketMember(left)
+		case token.TEMPLATE:
+			left = p.parseTaggedTemplate(left)
 		default:
 			return left
 		}
+	}
+}
+
+// parseTaggedTemplate wraps a tag expression and the template literal that
+// immediately follows it.
+func (p *parser) parseTaggedTemplate(tag ast.Expression) ast.Expression {
+	idx := p.idx
+	literal := p.literal
+	template, ok := p.parseTemplateLiteral(idx, literal).(*ast.TemplateLiteral)
+	if !ok {
+		return &ast.BadExpression{From: tag.Idx0(), To: p.idx}
+	}
+	return &ast.TaggedTemplateExpression{
+		Tag:      tag,
+		Template: template,
 	}
 }
 
@@ -1059,6 +1080,8 @@ func (p *parser) parseLeftHandSideExpressionAllowCall() ast.Expression {
 			left = p.parseBracketMember(left)
 		case token.LEFT_PARENTHESIS:
 			left = p.parseCallExpression(left)
+		case token.TEMPLATE:
+			left = p.parseTaggedTemplate(left)
 		default:
 			return left
 		}
