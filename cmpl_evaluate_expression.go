@@ -319,21 +319,25 @@ func (rt *runtime) cmplEvaluateNodeNewExpression(node *nodeNewExpression) Value 
 func (rt *runtime) cmplEvaluateNodeObjectLiteral(node *nodeObjectLiteral) Value {
 	result := rt.newObject()
 	for _, prop := range node.value {
+		key := prop.key
+		if prop.keyExpression != nil {
+			key = rt.cmplEvaluateNodeExpression(prop.keyExpression).resolve().string()
+		}
 		switch prop.kind {
 		case "value":
-			result.defineProperty(prop.key, rt.cmplEvaluateNodeExpression(prop.value).resolve(), 0o111, false)
+			result.defineProperty(key, rt.cmplEvaluateNodeExpression(prop.value).resolve(), 0o111, false)
 		case "get":
 			getter := rt.newNodeFunction(prop.value.(*nodeFunctionLiteral), rt.scope.lexical)
 			descriptor := property{}
 			descriptor.mode = 0o211
 			descriptor.value = propertyGetSet{getter, nil}
-			result.defineOwnProperty(prop.key, descriptor, false)
+			result.defineOwnProperty(key, descriptor, false)
 		case "set":
 			setter := rt.newNodeFunction(prop.value.(*nodeFunctionLiteral), rt.scope.lexical)
 			descriptor := property{}
 			descriptor.mode = 0o211
 			descriptor.value = propertyGetSet{nil, setter}
-			result.defineOwnProperty(prop.key, descriptor, false)
+			result.defineOwnProperty(key, descriptor, false)
 		default:
 			panic(fmt.Sprintf("unknown node object literal property kind %T", prop.kind))
 		}

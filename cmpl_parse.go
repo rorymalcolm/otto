@@ -148,9 +148,10 @@ func (cmpl *compiler) parseExpression(expr ast.Expression) nodeExpression {
 		}
 		for i, value := range expr.Value {
 			out.value[i] = nodeProperty{
-				key:   value.Key,
-				kind:  value.Kind,
-				value: cmpl.parseExpression(value.Value),
+				key:           value.Key,
+				kind:          value.Kind,
+				value:         cmpl.parseExpression(value.Value),
+				keyExpression: cmpl.parseExpression(value.KeyExpression),
 			}
 		}
 		return out
@@ -486,9 +487,10 @@ type (
 	}
 
 	nodeProperty struct {
-		value nodeExpression
-		key   string
-		kind  string
+		value         nodeExpression
+		key           string
+		kind          string
+		keyExpression nodeExpression
 	}
 
 	nodeRegExpLiteral struct {

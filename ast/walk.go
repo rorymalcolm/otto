@@ -151,6 +151,9 @@ func Walk(v Visitor, n Node) {
 	case *ObjectLiteral:
 		if n != nil {
 			for _, p := range n.Value {
+				if p.KeyExpression != nil {
+					Walk(v, p.KeyExpression)
+				}
 				Walk(v, p.Value)
 			}
 		}

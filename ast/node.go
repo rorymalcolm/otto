@@ -361,6 +361,9 @@ type Property struct {
 	Value Expression
 	Key   string
 	Kind  string
+	// KeyExpression holds the key of a computed property, e.g. {[expr]: v}.
+	// When non-nil it is evaluated at runtime and Key is ignored.
+	KeyExpression Expression
 }
 
 // RegExpLiteral represents a regular expression literal.

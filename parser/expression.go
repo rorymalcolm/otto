@@ -502,11 +502,50 @@ func (p *parser) parseObjectPropertyKey() (string, string) {
 	return literal, value
 }
 
+// isAccessorKey reports whether, having just read a "get" or "set" key, the
+// current token begins an accessor's property name rather than turning "get" /
+// "set" into an ordinary property (get:), shorthand (get, / get}) or a method
+// named get/set (get(). The property name itself may be an identifier, string,
+// number or a keyword such as null, so this is expressed as a negative check.
+func (p *parser) isAccessorKey() bool {
+	switch p.token {
+	case token.COLON, token.COMMA, token.RIGHT_BRACE, token.LEFT_PARENTHESIS:
+		return false
+	default:
+		return true
+	}
+}
+
 func (p *parser) parseObjectProperty() ast.Property {
+	// Computed property key: [expr]: value, or [expr]() { ... }.
+	if p.token == token.LEFT_BRACKET {
+		keyExpr, keyIdx := p.parseComputedPropertyKey()
+		if p.token == token.LEFT_PARENTHESIS {
+			return p.parseMethodDefinition(keyIdx, "", keyExpr)
+		}
+		if p.mode&StoreComments != 0 {
+			p.comments.MarkComments(ast.COLON)
+		}
+		p.expect(token.COLON)
+		return ast.Property{
+			KeyExpression: keyExpr,
+			Kind:          "value",
+			Value:         p.parseAssignmentExpression(),
+		}
+	}
+
+	keyIdx := p.idx
 	literal, value := p.parseObjectPropertyKey()
-	if literal == "get" && p.token != token.COLON {
+
+	// Getter / setter: get foo() { ... } or set foo(v) { ... }.
+	if (literal == "get" || literal == "set") && p.isAccessorKey() {
 		idx := p.idx
-		_, value = p.parseObjectPropertyKey()
+		var keyExpr ast.Expression
+		if p.token == token.LEFT_BRACKET {
+			keyExpr, _ = p.parseComputedPropertyKey()
+		} else {
+			_, value = p.parseObjectPropertyKey()
+		}
 		parameterList := p.parseFunctionParameterList()
 
 		node := &ast.FunctionLiteral{
@@ -515,24 +554,24 @@ func (p *parser) parseObjectProperty() ast.Property {
 		}
 		p.parseFunctionBlock(node)
 		return ast.Property{
-			Key:   value,
-			Kind:  "get",
-			Value: node,
+			Key:           value,
+			KeyExpression: keyExpr,
+			Kind:          literal,
+			Value:         node,
 		}
-	} else if literal == "set" && p.token != token.COLON {
-		idx := p.idx
-		_, value = p.parseObjectPropertyKey()
-		parameterList := p.parseFunctionParameterList()
+	}
 
-		node := &ast.FunctionLiteral{
-			Function:      idx,
-			ParameterList: parameterList,
-		}
-		p.parseFunctionBlock(node)
+	// Method shorthand: foo() { ... }.
+	if p.token == token.LEFT_PARENTHESIS {
+		return p.parseMethodDefinition(keyIdx, value, nil)
+	}
+
+	// Property shorthand: { foo } is sugar for { foo: foo }.
+	if p.token == token.COMMA || p.token == token.RIGHT_BRACE {
 		return ast.Property{
 			Key:   value,
-			Kind:  "set",
-			Value: node,
+			Kind:  "value",
+			Value: &ast.Identifier{Name: value, Idx: keyIdx},
 		}
 	}
 
@@ -551,6 +590,32 @@ func (p *parser) parseObjectProperty() ast.Property {
 		p.comments.SetExpression(exp.Value)
 	}
 	return exp
+}
+
+// parseComputedPropertyKey parses a [expr] computed key, returning the
+// expression and the index of the opening bracket.
+func (p *parser) parseComputedPropertyKey() (ast.Expression, file.Idx) {
+	idx := p.expect(token.LEFT_BRACKET)
+	keyExpr := p.parseAssignmentExpression()
+	p.expect(token.RIGHT_BRACKET)
+	return keyExpr, idx
+}
+
+// parseMethodDefinition parses the "(params) { body }" of an object method
+// shorthand, returning a "value" property whose value is a function literal.
+func (p *parser) parseMethodDefinition(idx file.Idx, key string, keyExpr ast.Expression) ast.Property {
+	parameterList := p.parseFunctionParameterList()
+	node := &ast.FunctionLiteral{
+		Function:      idx,
+		ParameterList: parameterList,
+	}
+	p.parseFunctionBlock(node)
+	return ast.Property{
+		Key:           key,
+		KeyExpression: keyExpr,
+		Kind:          "value",
+		Value:         node,
+	}
 }
 
 func (p *parser) parseObjectLiteral() ast.Expression {
