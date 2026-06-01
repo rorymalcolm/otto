@@ -221,8 +221,19 @@ func (p *parser) parseFunctionParameterList() *ast.ParameterList {
 	}
 	var list []*ast.Identifier
 	var defaults []ast.Expression
+	var rest *ast.Identifier
 	hasDefault := false
 	for p.token != token.RIGHT_PARENTHESIS && p.token != token.EOF {
+		if p.token == token.ELLIPSIS {
+			// A rest parameter (...name) must be the last parameter.
+			p.next()
+			if p.token != token.IDENTIFIER {
+				p.expect(token.IDENTIFIER)
+				break
+			}
+			rest = p.parseIdentifier()
+			break
+		}
 		if p.token != token.IDENTIFIER {
 			p.expect(token.IDENTIFIER)
 		} else {
@@ -252,6 +263,7 @@ func (p *parser) parseFunctionParameterList() *ast.ParameterList {
 	node := &ast.ParameterList{
 		Opening: opening,
 		List:    list,
+		Rest:    rest,
 		Closing: closing,
 	}
 	// Only retain the defaults slice if at least one parameter has a default,
