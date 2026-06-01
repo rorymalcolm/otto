@@ -48,7 +48,11 @@ func (p *parser) parsePrimaryExpression() ast.Expression {
 			Idx:  idx,
 		}
 		if p.token == token.ARROW {
-			return p.parseArrowFunction(idx, []*ast.Identifier{identifier}, idx, identifier.Idx1())
+			return p.parseArrowFunction(idx, &ast.ParameterList{
+				List:    []*ast.Identifier{identifier},
+				Opening: idx,
+				Closing: identifier.Idx1(),
+			})
 		}
 		return identifier
 	case token.NULL:
@@ -111,7 +115,7 @@ func (p *parser) parsePrimaryExpression() ast.Expression {
 			// syntax error (an empty parenthesised expression).
 			closing := p.expect(token.RIGHT_PARENTHESIS)
 			if p.token == token.ARROW {
-				return p.parseArrowFunction(opening, nil, opening, closing)
+				return p.parseArrowFunction(opening, &ast.ParameterList{Opening: opening, Closing: closing})
 			}
 			p.error(opening, "Unexpected token )")
 			return &ast.BadExpression{From: opening, To: closing}
@@ -122,12 +126,12 @@ func (p *parser) parsePrimaryExpression() ast.Expression {
 		}
 		closing := p.expect(token.RIGHT_PARENTHESIS)
 		if p.token == token.ARROW {
-			list, ok := arrowParameterList(expression)
+			params, ok := arrowParameterList(expression, opening, closing)
 			if !ok {
 				p.error(expression.Idx0(), "malformed arrow function parameter list")
 				return &ast.BadExpression{From: opening, To: p.idx}
 			}
-			return p.parseArrowFunction(opening, list, opening, closing)
+			return p.parseArrowFunction(opening, params)
 		}
 		return expression
 	case token.THIS:
@@ -770,6 +774,22 @@ func (p *parser) parseObjectProperty() ast.Property {
 			Key:   value,
 			Kind:  "value",
 			Value: &ast.Identifier{Name: value, Idx: keyIdx},
+		}
+	}
+
+	// CoverInitializedName: { foo = default }. Only valid when the object
+	// literal is later reinterpreted as a destructuring pattern; retained here
+	// so the arrow-function cover grammar can parse ({ a = 1 }) => ...
+	if p.token == token.ASSIGN {
+		p.next()
+		return ast.Property{
+			Key:  value,
+			Kind: "value",
+			Value: &ast.AssignExpression{
+				Operator: token.ASSIGN,
+				Left:     &ast.Identifier{Name: value, Idx: keyIdx},
+				Right:    p.parseAssignmentExpression(),
+			},
 		}
 	}
 

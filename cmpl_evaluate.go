@@ -43,6 +43,11 @@ func (rt *runtime) cmplCallNodeFunction(function *object, stash *fnStash, node *
 		if value.IsUndefined() && index < len(node.parameterDefaults) && node.parameterDefaults[index] != nil {
 			value = rt.cmplEvaluateNodeExpression(node.parameterDefaults[index]).resolve()
 		}
+		// A destructuring parameter binds the argument against its pattern.
+		if index < len(node.parameterTargets) && node.parameterTargets[index] != nil {
+			rt.bindPattern(node.parameterTargets[index], value, bindLet)
+			continue
+		}
 		// strict = false
 		rt.scope.lexical.setValue(name, value, false)
 	}

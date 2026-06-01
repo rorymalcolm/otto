@@ -109,6 +109,12 @@ func (cmpl *compiler) parseExpression(expr ast.Expression) nodeExpression {
 					out.parameterDefaults[i] = cmpl.parseExpression(def)
 				}
 			}
+			if expr.ParameterList.Targets != nil {
+				out.parameterTargets = make([]nodeExpression, len(list))
+				for i, target := range expr.ParameterList.Targets {
+					out.parameterTargets[i] = cmpl.parseExpression(target)
+				}
+			}
 			if expr.ParameterList.Rest != nil {
 				out.restParameter = expr.ParameterList.Rest.Name
 			}
@@ -645,6 +651,7 @@ type (
 		source            string
 		parameterList     []string
 		parameterDefaults []nodeExpression // parallel to parameterList; nil if none
+		parameterTargets  []nodeExpression // parallel to parameterList; pattern params
 		restParameter     string           // name of the rest parameter, or ""
 		varList           []string
 		functionList      []*nodeFunctionLiteral

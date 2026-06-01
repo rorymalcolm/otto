@@ -355,6 +355,10 @@ type ParameterList struct {
 	// Defaults is parallel to List: Defaults[i], when non-nil, is the default
 	// value expression for parameter List[i].
 	Defaults []Expression
+	// Targets is parallel to List: Targets[i], when non-nil, is a destructuring
+	// pattern (ArrayPattern or ObjectPattern) bound by parameter i, in which
+	// case List[i] is a placeholder.
+	Targets []Expression
 	// Rest, when non-nil, is the name of a rest parameter (...name) which
 	// collects any trailing arguments into an array.
 	Rest    *Identifier

@@ -223,8 +223,10 @@ func (p *parser) parseFunctionParameterList() *ast.ParameterList {
 	}
 	var list []*ast.Identifier
 	var defaults []ast.Expression
+	var targets []ast.Expression
 	var rest *ast.Identifier
 	hasDefault := false
+	hasTarget := false
 	for p.token != token.RIGHT_PARENTHESIS && p.token != token.EOF {
 		if p.token == token.ELLIPSIS {
 			// A rest parameter (...name) must be the last parameter.
@@ -236,23 +238,36 @@ func (p *parser) parseFunctionParameterList() *ast.ParameterList {
 			rest = p.parseIdentifier()
 			break
 		}
-		if p.token != token.IDENTIFIER {
-			p.expect(token.IDENTIFIER)
-		} else {
-			identifier := p.parseIdentifier()
-			list = append(list, identifier)
 
-			var def ast.Expression
-			if p.token == token.ASSIGN {
-				if p.mode&StoreComments != 0 {
-					p.comments.Unset()
-				}
+		var target ast.Expression
+		switch p.token {
+		case token.LEFT_BRACKET, token.LEFT_BRACE:
+			// A destructuring parameter, e.g. function f({a}, [b]) {}.
+			target = p.parseBindingTarget()
+			list = append(list, &ast.Identifier{Idx: p.idx})
+			hasTarget = true
+		case token.IDENTIFIER:
+			list = append(list, p.parseIdentifier())
+		default:
+			p.expect(token.IDENTIFIER)
+			if p.token != token.RIGHT_PARENTHESIS {
 				p.next()
-				def = p.parseAssignmentExpression()
-				hasDefault = true
 			}
-			defaults = append(defaults, def)
+			continue
 		}
+		targets = append(targets, target)
+
+		var def ast.Expression
+		if p.token == token.ASSIGN {
+			if p.mode&StoreComments != 0 {
+				p.comments.Unset()
+			}
+			p.next()
+			def = p.parseAssignmentExpression()
+			hasDefault = true
+		}
+		defaults = append(defaults, def)
+
 		if p.token != token.RIGHT_PARENTHESIS {
 			if p.mode&StoreComments != 0 {
 				p.comments.Unset()
@@ -268,10 +283,13 @@ func (p *parser) parseFunctionParameterList() *ast.ParameterList {
 		Rest:    rest,
 		Closing: closing,
 	}
-	// Only retain the defaults slice if at least one parameter has a default,
-	// keeping the common (default-free) case unchanged.
+	// Only retain the parallel slices when they carry information, keeping the
+	// common (plain-identifier) case unchanged.
 	if hasDefault {
 		node.Defaults = defaults
+	}
+	if hasTarget {
+		node.Targets = targets
 	}
 
 	return node
@@ -426,37 +444,75 @@ func (p *parser) parseFunctionBlock(node *ast.FunctionLiteral) {
 // parenthesised group) into a list of arrow function parameters. It only
 // accepts plain identifiers; defaults, rest and destructuring are not yet
 // supported.
-func arrowParameterList(expression ast.Expression) ([]*ast.Identifier, bool) {
-	switch expr := expression.(type) {
-	case *ast.Identifier:
-		return []*ast.Identifier{expr}, true
-	case *ast.SequenceExpression:
-		list := make([]*ast.Identifier, 0, len(expr.Sequence))
-		for _, item := range expr.Sequence {
-			identifier, ok := item.(*ast.Identifier)
+func arrowParameterList(expression ast.Expression, opening, closing file.Idx) (*ast.ParameterList, bool) {
+	pl := &ast.ParameterList{Opening: opening, Closing: closing}
+	hasTarget := false
+	hasDefault := false
+
+	add := func(e ast.Expression) bool {
+		var def ast.Expression
+		if assign, ok := e.(*ast.AssignExpression); ok {
+			if assign.Operator != token.ASSIGN {
+				return false
+			}
+			def = assign.Right
+			e = assign.Left
+			hasDefault = true
+		}
+
+		var name *ast.Identifier
+		var target ast.Expression
+		switch t := e.(type) {
+		case *ast.Identifier:
+			name = t
+		case *ast.ArrayLiteral, *ast.ObjectLiteral:
+			pattern, ok := literalToPattern(e)
 			if !ok {
+				return false
+			}
+			target = pattern
+			name = &ast.Identifier{Idx: e.Idx0()}
+			hasTarget = true
+		case *ast.ArrayPattern, *ast.ObjectPattern:
+			target = e
+			name = &ast.Identifier{Idx: e.Idx0()}
+			hasTarget = true
+		default:
+			return false
+		}
+		pl.List = append(pl.List, name)
+		pl.Targets = append(pl.Targets, target)
+		pl.Defaults = append(pl.Defaults, def)
+		return true
+	}
+
+	if seq, ok := expression.(*ast.SequenceExpression); ok {
+		for _, item := range seq.Sequence {
+			if !add(item) {
 				return nil, false
 			}
-			list = append(list, identifier)
 		}
-		return list, true
-	default:
+	} else if !add(expression) {
 		return nil, false
 	}
+
+	if !hasTarget {
+		pl.Targets = nil
+	}
+	if !hasDefault {
+		pl.Defaults = nil
+	}
+	return pl, true
 }
 
 // parseArrowFunction parses the "=> body" portion of an arrow function, given a
 // parameter list that has already been collected by the caller. p.token is
 // expected to be token.ARROW.
-func (p *parser) parseArrowFunction(start file.Idx, list []*ast.Identifier, opening, closing file.Idx) ast.Expression {
+func (p *parser) parseArrowFunction(start file.Idx, params *ast.ParameterList) ast.Expression {
 	node := &ast.FunctionLiteral{
-		Function: start,
-		IsArrow:  true,
-		ParameterList: &ast.ParameterList{
-			List:    list,
-			Opening: opening,
-			Closing: closing,
-		},
+		Function:      start,
+		IsArrow:       true,
+		ParameterList: params,
 	}
 	if p.mode&StoreComments != 0 {
 		p.comments.Unset()
