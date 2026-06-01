@@ -131,6 +131,8 @@ tokens:
     symbol: ":"
   - name: QUESTION_MARK
     symbol: "?"
+  - name: ARROW
+    symbol: "=>"
 
   - group: Basic flow - keywords below here
   - name: _

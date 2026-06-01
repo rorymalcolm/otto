@@ -53,7 +53,14 @@ func (rt *runtime) cmplEvaluateNodeExpression(node nodeExpression) Value {
 			local = rt.newDeclarationStash(local)
 		}
 
-		value := objectValue(rt.newNodeFunction(node, local))
+		fnObj := rt.newNodeFunction(node, local)
+		if node.isArrow {
+			// Capture the enclosing `this` for lexical binding at call time.
+			fn := fnObj.value.(nodeFunctionObject)
+			fn.this = objectValue(rt.scope.this)
+			fnObj.value = fn
+		}
+		value := objectValue(fnObj)
 		if node.name != "" {
 			local.createBinding(node.name, false, value)
 		}

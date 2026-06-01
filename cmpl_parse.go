@@ -91,10 +91,11 @@ func (cmpl *compiler) parseExpression(expr ast.Expression) nodeExpression {
 			name = expr.Name.Name
 		}
 		out := &nodeFunctionLiteral{
-			name:   name,
-			body:   cmpl.parseStatement(expr.Body),
-			source: expr.Source,
-			file:   cmpl.file,
+			name:    name,
+			body:    cmpl.parseStatement(expr.Body),
+			source:  expr.Source,
+			file:    cmpl.file,
+			isArrow: expr.IsArrow,
 		}
 		if expr.ParameterList != nil {
 			list := expr.ParameterList.List
@@ -453,6 +454,7 @@ type (
 		parameterList []string
 		varList       []string
 		functionList  []*nodeFunctionLiteral
+		isArrow       bool
 	}
 
 	nodeIdentifier struct {

@@ -41,10 +41,14 @@ func (p *parser) parsePrimaryExpression() ast.Expression {
 				}
 			}
 		}
-		return &ast.Identifier{
+		identifier := &ast.Identifier{
 			Name: literal,
 			Idx:  idx,
 		}
+		if p.token == token.ARROW {
+			return p.parseArrowFunction(idx, []*ast.Identifier{identifier}, idx, identifier.Idx1())
+		}
+		return identifier
 	case token.NULL:
 		p.next()
 		return &ast.NullLiteral{
@@ -97,12 +101,30 @@ func (p *parser) parsePrimaryExpression() ast.Expression {
 	case token.LEFT_BRACKET:
 		return p.parseArrayLiteral()
 	case token.LEFT_PARENTHESIS:
-		p.expect(token.LEFT_PARENTHESIS)
+		opening := p.expect(token.LEFT_PARENTHESIS)
+		if p.token == token.RIGHT_PARENTHESIS {
+			// Either an empty arrow parameter list, "() => ...", or a
+			// syntax error (an empty parenthesised expression).
+			closing := p.expect(token.RIGHT_PARENTHESIS)
+			if p.token == token.ARROW {
+				return p.parseArrowFunction(opening, nil, opening, closing)
+			}
+			p.error(opening, "Unexpected token )")
+			return &ast.BadExpression{From: opening, To: closing}
+		}
 		expression := p.parseExpression()
 		if p.mode&StoreComments != 0 {
 			p.comments.Unset()
 		}
-		p.expect(token.RIGHT_PARENTHESIS)
+		closing := p.expect(token.RIGHT_PARENTHESIS)
+		if p.token == token.ARROW {
+			list, ok := arrowParameterList(expression)
+			if !ok {
+				p.error(expression.Idx0(), "malformed arrow function parameter list")
+				return &ast.BadExpression{From: opening, To: p.idx}
+			}
+			return p.parseArrowFunction(opening, list, opening, closing)
+		}
 		return expression
 	case token.THIS:
 		p.next()

@@ -2,6 +2,7 @@ package parser
 
 import (
 	"github.com/robertkrimen/otto/ast"
+	"github.com/robertkrimen/otto/file"
 	"github.com/robertkrimen/otto/token"
 )
 
@@ -293,6 +294,81 @@ func (p *parser) parseFunctionBlock(node *ast.FunctionLiteral) {
 	}()
 	node.Body = p.parseBlockStatement()
 	node.DeclarationList = p.scope.declarationList
+}
+
+// arrowParameterList converts an already-parsed expression (the contents of a
+// parenthesised group) into a list of arrow function parameters. It only
+// accepts plain identifiers; defaults, rest and destructuring are not yet
+// supported.
+func arrowParameterList(expression ast.Expression) ([]*ast.Identifier, bool) {
+	switch expr := expression.(type) {
+	case *ast.Identifier:
+		return []*ast.Identifier{expr}, true
+	case *ast.SequenceExpression:
+		list := make([]*ast.Identifier, 0, len(expr.Sequence))
+		for _, item := range expr.Sequence {
+			identifier, ok := item.(*ast.Identifier)
+			if !ok {
+				return nil, false
+			}
+			list = append(list, identifier)
+		}
+		return list, true
+	default:
+		return nil, false
+	}
+}
+
+// parseArrowFunction parses the "=> body" portion of an arrow function, given a
+// parameter list that has already been collected by the caller. p.token is
+// expected to be token.ARROW.
+func (p *parser) parseArrowFunction(start file.Idx, list []*ast.Identifier, opening, closing file.Idx) ast.Expression {
+	node := &ast.FunctionLiteral{
+		Function: start,
+		IsArrow:  true,
+		ParameterList: &ast.ParameterList{
+			List:    list,
+			Opening: opening,
+			Closing: closing,
+		},
+	}
+	if p.mode&StoreComments != 0 {
+		p.comments.Unset()
+	}
+	p.expect(token.ARROW)
+	p.parseArrowFunctionBody(node)
+	node.Source = p.slice(node.Idx0(), node.Idx1())
+
+	return node
+}
+
+func (p *parser) parseArrowFunctionBody(node *ast.FunctionLiteral) {
+	if p.token == token.LEFT_BRACE {
+		// A block body behaves like an ordinary function body.
+		p.openScope()
+		inFunction := p.scope.inFunction
+		p.scope.inFunction = true
+		defer func() {
+			p.scope.inFunction = inFunction
+			p.closeScope()
+		}()
+		node.Body = p.parseBlockStatement()
+		node.DeclarationList = p.scope.declarationList
+		return
+	}
+
+	// A concise body is a single expression with an implicit return.
+	expression := p.parseAssignmentExpression()
+	node.Body = &ast.BlockStatement{
+		LeftBrace: expression.Idx0(),
+		List: []ast.Statement{
+			&ast.ReturnStatement{
+				Return:   expression.Idx0(),
+				Argument: expression,
+			},
+		},
+		RightBrace: expression.Idx1(),
+	}
 }
 
 func (p *parser) parseDebuggerStatement() ast.Statement {

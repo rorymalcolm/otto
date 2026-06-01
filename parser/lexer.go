@@ -311,10 +311,15 @@ func (p *parser) scan() (tkn token.Token, literal string, idx file.Idx) { //noli
 			case '>':
 				tkn = p.switch6(token.GREATER, token.GREATER_OR_EQUAL, '>', token.SHIFT_RIGHT, token.SHIFT_RIGHT_ASSIGN, '>', token.UNSIGNED_SHIFT_RIGHT, token.UNSIGNED_SHIFT_RIGHT_ASSIGN)
 			case '=':
-				tkn = p.switch2(token.ASSIGN, token.EQUAL)
-				if tkn == token.EQUAL && p.chr == '=' {
+				if p.chr == '>' {
 					p.read()
-					tkn = token.STRICT_EQUAL
+					tkn = token.ARROW
+				} else {
+					tkn = p.switch2(token.ASSIGN, token.EQUAL)
+					if tkn == token.EQUAL && p.chr == '=' {
+						p.read()
+						tkn = token.STRICT_EQUAL
+					}
 				}
 			case '!':
 				tkn = p.switch2(token.NOT, token.NOT_EQUAL)

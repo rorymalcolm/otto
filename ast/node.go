@@ -230,6 +230,7 @@ type FunctionLiteral struct {
 	Source          string
 	DeclarationList []Declaration
 	Function        file.Idx
+	IsArrow         bool
 }
 
 // Idx0 implements Node.

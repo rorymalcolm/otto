@@ -37,7 +37,7 @@ func (rt *runtime) cmplCallNodeFunction(function *object, stash *fnStash, node *
 		rt.scope.lexical.setValue(name, value, false)
 	}
 
-	if !argumentsFound {
+	if !node.isArrow && !argumentsFound {
 		arguments := rt.newArgumentsObject(indexOfParameterName, stash, len(argumentList))
 		arguments.defineProperty("callee", objectValue(function), 0o101, false)
 		stash.arguments = arguments

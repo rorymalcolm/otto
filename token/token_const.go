@@ -76,6 +76,7 @@ const (
 	SEMICOLON         // ;
 	COLON             // :
 	QUESTION_MARK     // ?
+	ARROW             // =>
 	// Basic flow - keywords below here.
 	_
 	IF
@@ -173,6 +174,7 @@ var token2string = [...]string{
 	SEMICOLON:                   ";",
 	COLON:                       ":",
 	QUESTION_MARK:               "?",
+	ARROW:                       "=>",
 	IF:                          "if",
 	IN:                          "in",
 	DO:                          "do",

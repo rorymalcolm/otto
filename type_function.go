@@ -116,6 +116,9 @@ func (fn bindFunctionObject) construct(argumentList []Value) Value {
 type nodeFunctionObject struct {
 	node  *nodeFunctionLiteral
 	stash stasher
+	// this holds the lexically captured `this` for arrow functions. It is
+	// only meaningful when node.isArrow is true.
+	this Value
 }
 
 func (rt *runtime) newNodeFunctionObject(node *nodeFunctionLiteral, stash stasher) *object {
@@ -203,6 +206,11 @@ func (o *object) call(this Value, argumentList []Value, eval bool, frm frame) Va
 
 	case nodeFunctionObject:
 		rt := o.runtime
+		// Arrow functions do not bind their own `this`; they use the value
+		// captured lexically when the function literal was evaluated.
+		if fn.node.isArrow {
+			this = fn.this
+		}
 		stash := rt.enterFunctionScope(fn.stash, this)
 		rt.scope.frame = frame{
 			callee: fn.node.name,
