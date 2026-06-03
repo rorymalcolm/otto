@@ -357,7 +357,7 @@ func (rt *runtime) cmplEvaluateNodeForInStatement(node *nodeForInStatement) Valu
 
 	// A block-scoped loop variable (for (let k in obj)) gets a fresh binding
 	// per iteration in its own lexical environment.
-	lexical := node.lexicalBinding != ""
+	lexical := node.lexical
 	var outerLexical stasher
 	if lexical {
 		outerLexical = rt.scope.lexical
@@ -370,18 +370,9 @@ func (rt *runtime) cmplEvaluateNodeForInStatement(node *nodeForInStatement) Valu
 		enumerateValue := emptyValue
 		obj.enumerate(false, func(name string) bool {
 			if lexical {
-				iterEnv := rt.newDeclarationStash(outerLexical)
-				iterEnv.createBinding(node.lexicalBinding, false, Value{})
-				rt.scope.lexical = iterEnv
+				rt.scope.lexical = rt.newDeclarationStash(outerLexical)
 			}
-			into := rt.cmplEvaluateNodeExpression(into)
-			// In the case of: for (var abc in def) ...
-			if into.reference() == nil {
-				identifier := into.string()
-				// TODO Should be true or false (strictness) depending on context
-				into = toValue(getIdentifierReference(rt, rt.scope.lexical, identifier, false, -1))
-			}
-			rt.putValue(into.reference(), stringValue(name))
+			rt.bindForTarget(into, stringValue(name), lexical, node.immutable)
 			for _, node := range body {
 				value := rt.cmplEvaluateNodeStatement(node)
 				switch value.kind {
@@ -435,6 +426,14 @@ func (rt *runtime) bindForTarget(into nodeExpression, value Value, lexical, immu
 		}
 		ref := getIdentifierReference(rt, rt.scope.lexical, ve.name, false, at(ve.idx))
 		rt.putValue(ref, value)
+		return
+	}
+
+	// An assignment destructuring pattern, e.g. for ([a, b] of x) or
+	// for ({a} in obj). These bind against existing references.
+	switch into.(type) {
+	case *nodeArrayPattern, *nodeObjectPattern:
+		rt.bindPattern(into, value, bindAssign)
 		return
 	}
 

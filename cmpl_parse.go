@@ -451,9 +451,6 @@ func (cmpl *compiler) parseStatement(stmt ast.Statement) nodeStatement {
 		if stmt.Lexical != 0 {
 			out.lexical = true
 			out.immutable = stmt.Lexical == token.CONST
-			if ve, ok := stmt.Into.(*ast.VariableExpression); ok {
-				out.lexicalBinding = ve.Name
-			}
 		}
 		out.body = cmpl.parseLoopBody(stmt.Body)
 		return out
@@ -814,13 +811,12 @@ type (
 	}
 
 	nodeForInStatement struct {
-		into           nodeExpression
-		source         nodeExpression
-		lexicalBinding string
-		body           []nodeStatement
-		lexical        bool
-		immutable      bool
-		of             bool
+		into      nodeExpression
+		source    nodeExpression
+		body      []nodeStatement
+		lexical   bool
+		immutable bool
+		of        bool
 	}
 
 	nodeForStatement struct {

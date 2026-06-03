@@ -874,6 +874,19 @@ func (p *parser) parseForOrForInStatement() ast.Statement {
 		switch left[0].(type) {
 		case *ast.Identifier, *ast.DotExpression, *ast.BracketExpression, *ast.VariableExpression:
 			// These are all acceptable
+		case *ast.ArrayPattern, *ast.ObjectPattern:
+			// A binding pattern declared with var/let/const, e.g.
+			// for (const [a, b] of x) or for (let {x} in obj).
+		case *ast.ArrayLiteral, *ast.ObjectLiteral:
+			// An assignment destructuring target, e.g. for ([a, b] of x)
+			// or for ({a} in obj). Reinterpret the literal as a pattern.
+			pattern, ok := literalToPattern(left[0])
+			if !ok {
+				p.error(idx, "Invalid left-hand side in for-in")
+				p.nextStatement()
+				return &ast.BadStatement{From: idx, To: p.idx}
+			}
+			left[0] = pattern
 		default:
 			p.error(idx, "Invalid left-hand side in for-in")
 			p.nextStatement()
