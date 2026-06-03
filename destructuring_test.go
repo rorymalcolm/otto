@@ -78,6 +78,25 @@ func TestDestructuringAssignment(t *testing.T) {
 
 		// Swap idiom.
 		test(`var a = 1, b = 2; [a, b] = [b, a]; a + "," + b;`, "2,1")
+
+		// A nested array pattern with a default, as an assignment target.
+		test(`var x, y; ({ w: [x, y] = [4, 5] } = { w: [7] }); x + "," + y;`, "7,undefined")
+		test(`var x, y; ({ w: [x, y] = [4, 5] } = {}); x + "," + y;`, "4,5")
+
+		// A nested object pattern with a default inside an array target.
+		test(`var x, y; [{ x, y } = { x: 1, y: 2 }] = []; x + "," + y;`, "1,2")
+
+		// A rest element must be the final element of an array pattern: an
+		// element or further rest may not follow it.
+		test(`raise:
+            eval("[...x, y] = [1, 2, 3];");
+        `, "SyntaxError: (anonymous): Line 1:1 invalid destructuring assignment target")
+		test(`raise:
+            eval("[...x, ...y] = [1, 2, 3];");
+        `, "SyntaxError: (anonymous): Line 1:1 invalid destructuring assignment target")
+
+		// A trailing rest element remains valid.
+		test(`var a, b; [a, ...b] = [1, 2, 3]; a + ":" + b.join(",");`, "1:2,3")
 	})
 }
 

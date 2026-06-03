@@ -480,10 +480,20 @@ func literalToPattern(expr ast.Expression) (ast.Expression, bool) {
 	case *ast.ArrayLiteral:
 		pattern := &ast.ArrayPattern{LeftBracket: lit.LeftBracket, RightBracket: lit.RightBracket}
 		for _, element := range lit.Value {
+			// A rest element must be the final element: no further element,
+			// elision, or rest may follow it ("[...x, y]" is a syntax error).
+			if pattern.Rest != nil {
+				return nil, false
+			}
 			switch el := element.(type) {
 			case *ast.EmptyExpression:
 				pattern.Elements = append(pattern.Elements, nil)
 			case *ast.SpreadExpression:
+				// A rest element binds the remainder and so cannot carry a
+				// default initializer: "[...x = 1]" is a syntax error.
+				if _, isDefault := el.Value.(*ast.AssignExpression); isDefault {
+					return nil, false
+				}
 				target, ok := assignmentTarget(el.Value)
 				if !ok {
 					return nil, false
@@ -526,6 +536,11 @@ func literalToPattern(expr ast.Expression) (ast.Expression, bool) {
 func assignmentTarget(expr ast.Expression) (ast.Expression, bool) {
 	switch e := expr.(type) {
 	case *ast.Identifier, *ast.DotExpression, *ast.BracketExpression:
+		return expr, true
+	case *ast.ArrayPattern, *ast.ObjectPattern:
+		// A nested array or object literal that was already reinterpreted as a
+		// binding pattern (e.g. an element default whose left side parsed as a
+		// destructuring assignment) is a valid target as-is.
 		return expr, true
 	case *ast.ArrayLiteral, *ast.ObjectLiteral:
 		return literalToPattern(expr)
