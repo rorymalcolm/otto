@@ -78,6 +78,13 @@ func TestDestructuringAssignment(t *testing.T) {
 
 		// Swap idiom.
 		test(`var a = 1, b = 2; [a, b] = [b, a]; a + "," + b;`, "2,1")
+
+		// A nested array pattern with a default, as an assignment target.
+		test(`var x, y; ({ w: [x, y] = [4, 5] } = { w: [7] }); x + "," + y;`, "7,undefined")
+		test(`var x, y; ({ w: [x, y] = [4, 5] } = {}); x + "," + y;`, "4,5")
+
+		// A nested object pattern with a default inside an array target.
+		test(`var x, y; [{ x, y } = { x: 1, y: 2 }] = []; x + "," + y;`, "1,2")
 	})
 }
 

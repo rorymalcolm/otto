@@ -72,3 +72,42 @@ func TestArrowParameterDestructuring(t *testing.T) {
         `, "3,7")
 	})
 }
+
+// TestArrowNestedPatternDefaults covers arrow parameter lists whose patterns
+// nest a defaulted array or object pattern, e.g. ([{x} = {}]) => ... The inner
+// "{x} = {}" parses as a destructuring assignment, so its left side is already
+// a pattern when the cover grammar reinterprets the outer literal.
+func TestArrowNestedPatternDefaults(t *testing.T) {
+	tt(t, func() {
+		test, _ := test()
+
+		// Defaulted object pattern nested inside an array pattern parameter.
+		test(`var f = ([{ x, y } = { x: 1, y: 2 }]) => x + "," + y; f([]);`, "1,2")
+		test(`var f = ([{ x, y } = { x: 1, y: 2 }]) => x + "," + y; f([{x: 7, y: 8}]);`, "7,8")
+
+		// Defaulted array pattern nested inside an array pattern parameter.
+		test(`var f = ([[a, b] = [4, 5]]) => a + "," + b; f([]);`, "4,5")
+
+		// Defaulted array pattern nested inside a defaulted object pattern.
+		test(`var f = ({ w: [a, b] = [4, 5] } = { w: [7] }) => a + "," + b; f();`, "7,undefined")
+
+		// A rest element binding a nested pattern (no default) is still valid.
+		test(`var f = ([a, ...[b]]) => a + "," + b; f([1, 2]);`, "1,2")
+	})
+}
+
+// TestArrowInvalidPatternRest checks that genuinely invalid arrow parameter
+// lists are still rejected: a rest element may not carry a default initializer.
+func TestArrowInvalidPatternRest(t *testing.T) {
+	tt(t, func() {
+		test, _ := test()
+
+		test(`raise:
+            eval("([...[x] = []]) => x;");
+        `, "SyntaxError: (anonymous): Line 1:2 malformed arrow function parameter list (and 1 more errors)")
+
+		test(`raise:
+            eval("([...x = 1]) => x;");
+        `, "SyntaxError: (anonymous): Line 1:2 malformed arrow function parameter list (and 1 more errors)")
+	})
+}
