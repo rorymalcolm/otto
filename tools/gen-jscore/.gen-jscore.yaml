@@ -340,6 +340,14 @@ types:
         function: 1
       - name: trunc
         function: 1
+      - name: sign
+        function: 1
+      - name: hypot
+        function: 2
+      - name: clz32
+        function: 1
+      - name: fround
+        function: 1
       - name: E
         kind: valueNumber
         value: math.E
