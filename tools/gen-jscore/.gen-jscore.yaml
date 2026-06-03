@@ -38,6 +38,16 @@ types:
         function: 1
       - name: getOwnPropertyNames
         function: 1
+      - name: entries
+        function: 1
+      - name: is
+        function: 2
+      - name: fromEntries
+        function: 1
+      - name: setPrototypeOf
+        function: 2
+      - name: getOwnPropertyDescriptors
+        function: 1
     prototype:
       value: prototypeValueObject
       properties:
@@ -266,6 +276,18 @@ types:
         value: rt.global.NumberPrototype
       - name: isNaN
         function: 1
+      - name: isInteger
+        function: 1
+      - name: isFinite
+        function: 1
+      - name: isSafeInteger
+        function: 1
+      - name: parseInt
+        function: 2
+        call: GlobalParseInt
+      - name: parseFloat
+        function: 1
+        call: GlobalParseFloat
       - name: MAX_VALUE
         value: math.MaxFloat64
         kind: valueNumber
