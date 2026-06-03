@@ -351,7 +351,7 @@ func builtinObjectFromEntries(call FunctionCall) Value {
 	length := objectLength(source)
 
 	result := call.runtime.newObject()
-	for index := uint32(0); index < length; index++ {
+	for index := range length {
 		entryValue := source.get(strconv.FormatUint(uint64(index), 10))
 		if !entryValue.IsObject() {
 			panic(call.runtime.panicTypeError("Object.fromEntries entry is not an object"))
