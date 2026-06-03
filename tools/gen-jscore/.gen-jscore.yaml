@@ -226,6 +226,20 @@ types:
           function: 2
         - name: startsWith
           function: 1
+        - name: includes
+          function: 1
+        - name: endsWith
+          function: 1
+        - name: repeat
+          function: 1
+        - name: padStart
+          function: 1
+        - name: padEnd
+          function: 1
+        - name: at
+          function: 1
+        - name: replaceAll
+          function: 2
         - name: toString
           function: -1
         - name: trim
