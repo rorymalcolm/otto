@@ -480,6 +480,11 @@ func literalToPattern(expr ast.Expression) (ast.Expression, bool) {
 	case *ast.ArrayLiteral:
 		pattern := &ast.ArrayPattern{LeftBracket: lit.LeftBracket, RightBracket: lit.RightBracket}
 		for _, element := range lit.Value {
+			// A rest element must be the final element: no further element,
+			// elision, or rest may follow it ("[...x, y]" is a syntax error).
+			if pattern.Rest != nil {
+				return nil, false
+			}
 			switch el := element.(type) {
 			case *ast.EmptyExpression:
 				pattern.Elements = append(pattern.Elements, nil)

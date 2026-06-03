@@ -109,5 +109,10 @@ func TestArrowInvalidPatternRest(t *testing.T) {
 		test(`raise:
             eval("([...x = 1]) => x;");
         `, "SyntaxError: (anonymous): Line 1:2 malformed arrow function parameter list (and 1 more errors)")
+
+		// A rest element must be the final element: nothing may follow it.
+		test(`raise:
+            eval("([...x, y]) => x;");
+        `, "SyntaxError: (anonymous): Line 1:2 malformed arrow function parameter list (and 1 more errors)")
 	})
 }
