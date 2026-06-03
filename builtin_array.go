@@ -836,7 +836,7 @@ func builtinArrayCopyWithin(call FunctionCall) Value {
 
 // arrayFlatten appends the elements of source (an array-like object) to target,
 // recursively flattening nested arrays up to depth levels. Holes are skipped.
-func arrayFlatten(rt *runtime, target *[]Value, source *object, depth float64) {
+func arrayFlatten(target *[]Value, source *object, depth float64) {
 	length := int64(toUint32(source.get(propertyLength)))
 	for index := range length {
 		key := arrayIndexToString(index)
@@ -846,7 +846,7 @@ func arrayFlatten(rt *runtime, target *[]Value, source *object, depth float64) {
 		element := source.get(key)
 		if depth > 0 && element.kind == valueObject {
 			if obj := element.object(); isArray(obj) {
-				arrayFlatten(rt, target, obj, depth-1)
+				arrayFlatten(target, obj, depth-1)
 				continue
 			}
 		}
@@ -861,7 +861,7 @@ func builtinArrayFlat(call FunctionCall) Value {
 		depth = toIntegerFloat(depthValue)
 	}
 	values := []Value{}
-	arrayFlatten(call.runtime, &values, thisObject, depth)
+	arrayFlatten(&values, thisObject, depth)
 	return objectValue(call.runtime.newArrayOf(values))
 }
 
@@ -884,7 +884,7 @@ func builtinArrayFlatMap(call FunctionCall) Value {
 		mapped := callback.call(call.runtime, callThis, thisObject.get(key), int64Value(index), this)
 		if mapped.kind == valueObject {
 			if obj := mapped.object(); isArray(obj) {
-				arrayFlatten(call.runtime, &values, obj, 0)
+				arrayFlatten(&values, obj, 0)
 				continue
 			}
 		}
@@ -924,8 +924,8 @@ func builtinArrayFrom(call FunctionCall) Value {
 
 	var source []Value
 	if items.kind == valueString {
-		// Iterate by UTF-16 code unit, matching string indexing semantics.
-		for _, r := range []rune(items.string()) {
+		// Iterate by code point, matching the spec's string-iterator semantics.
+		for _, r := range items.string() {
 			source = append(source, stringValue(string(r)))
 		}
 	} else {
