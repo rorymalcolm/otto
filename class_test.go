@@ -75,6 +75,44 @@ func TestClassAccessors(t *testing.T) {
 	})
 }
 
+// TestClassAccessorDescriptor guards against a regression where
+// Object.getOwnPropertyDescriptor panicked on accessor (getter/setter)
+// properties because the descriptor was reflected as a data descriptor.
+func TestClassAccessorDescriptor(t *testing.T) {
+	tt(t, func() {
+		test, _ := test()
+
+		// Getter and setter together: the descriptor must expose get/set
+		// (not value/writable) and the correct enumerable/configurable flags.
+		test(`
+            class C { get x() { return 1; } set x(v) {} }
+            var d = Object.getOwnPropertyDescriptor(C.prototype, "x");
+            [
+                typeof d.get,
+                typeof d.set,
+                "value" in d,
+                "writable" in d,
+                d.enumerable,
+                d.configurable,
+            ].join(",");
+        `, "function,function,false,false,false,true")
+
+		// Getter only: set must be undefined, get must be the function.
+		test(`
+            class C { get x() { return 1; } }
+            var d = Object.getOwnPropertyDescriptor(C.prototype, "x");
+            [typeof d.get, d.set === undefined, "get" in d, "set" in d].join(",");
+        `, "function,true,true,true")
+
+		// Setter only: get must be undefined, set must be the function.
+		test(`
+            class C { set x(v) {} }
+            var d = Object.getOwnPropertyDescriptor(C.prototype, "x");
+            [d.get === undefined, typeof d.set].join(",");
+        `, "true,function")
+	})
+}
+
 func TestClassInheritance(t *testing.T) {
 	tt(t, func() {
 		test, _ := test()
