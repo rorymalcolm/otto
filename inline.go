@@ -4697,6 +4697,154 @@ func (rt *runtime) newContext() {
 					},
 				},
 			},
+			"sign": {
+				mode: 0o101,
+				value: Value{
+					kind: valueObject,
+					value: &object{
+						runtime:     rt,
+						class:       classFunctionName,
+						objectClass: classObject,
+						prototype:   rt.global.FunctionPrototype,
+						extensible:  true,
+						property: map[string]property{
+							propertyLength: {
+								mode: 0,
+								value: Value{
+									kind:  valueNumber,
+									value: 1,
+								},
+							},
+							propertyName: {
+								mode: 0,
+								value: Value{
+									kind:  valueString,
+									value: "sign",
+								},
+							},
+						},
+						propertyOrder: []string{
+							propertyLength,
+							propertyName,
+						},
+						value: nativeFunctionObject{
+							name: "sign",
+							call: builtinMathSign,
+						},
+					},
+				},
+			},
+			"hypot": {
+				mode: 0o101,
+				value: Value{
+					kind: valueObject,
+					value: &object{
+						runtime:     rt,
+						class:       classFunctionName,
+						objectClass: classObject,
+						prototype:   rt.global.FunctionPrototype,
+						extensible:  true,
+						property: map[string]property{
+							propertyLength: {
+								mode: 0,
+								value: Value{
+									kind:  valueNumber,
+									value: 2,
+								},
+							},
+							propertyName: {
+								mode: 0,
+								value: Value{
+									kind:  valueString,
+									value: "hypot",
+								},
+							},
+						},
+						propertyOrder: []string{
+							propertyLength,
+							propertyName,
+						},
+						value: nativeFunctionObject{
+							name: "hypot",
+							call: builtinMathHypot,
+						},
+					},
+				},
+			},
+			"clz32": {
+				mode: 0o101,
+				value: Value{
+					kind: valueObject,
+					value: &object{
+						runtime:     rt,
+						class:       classFunctionName,
+						objectClass: classObject,
+						prototype:   rt.global.FunctionPrototype,
+						extensible:  true,
+						property: map[string]property{
+							propertyLength: {
+								mode: 0,
+								value: Value{
+									kind:  valueNumber,
+									value: 1,
+								},
+							},
+							propertyName: {
+								mode: 0,
+								value: Value{
+									kind:  valueString,
+									value: "clz32",
+								},
+							},
+						},
+						propertyOrder: []string{
+							propertyLength,
+							propertyName,
+						},
+						value: nativeFunctionObject{
+							name: "clz32",
+							call: builtinMathClz32,
+						},
+					},
+				},
+			},
+			"fround": {
+				mode: 0o101,
+				value: Value{
+					kind: valueObject,
+					value: &object{
+						runtime:     rt,
+						class:       classFunctionName,
+						objectClass: classObject,
+						prototype:   rt.global.FunctionPrototype,
+						extensible:  true,
+						property: map[string]property{
+							propertyLength: {
+								mode: 0,
+								value: Value{
+									kind:  valueNumber,
+									value: 1,
+								},
+							},
+							propertyName: {
+								mode: 0,
+								value: Value{
+									kind:  valueString,
+									value: "fround",
+								},
+							},
+						},
+						propertyOrder: []string{
+							propertyLength,
+							propertyName,
+						},
+						value: nativeFunctionObject{
+							name: "fround",
+							call: builtinMathFround,
+						},
+					},
+				},
+			},
 			"E": {
 				mode: 0,
 				value: Value{
@@ -4785,6 +4933,10 @@ func (rt *runtime) newContext() {
 			"tan",
 			"tanh",
 			"trunc",
+			"sign",
+			"hypot",
+			"clz32",
+			"fround",
 			"E",
 			"LN10",
 			"LN2",
