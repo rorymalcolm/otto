@@ -2523,6 +2523,265 @@ func (rt *runtime) newContext() {
 					},
 				},
 			},
+			"includes": {
+				mode: 0o101,
+				value: Value{
+					kind: valueObject,
+					value: &object{
+						runtime:     rt,
+						class:       classFunctionName,
+						objectClass: classObject,
+						prototype:   rt.global.FunctionPrototype,
+						extensible:  true,
+						property: map[string]property{
+							propertyLength: {
+								mode: 0,
+								value: Value{
+									kind:  valueNumber,
+									value: 1,
+								},
+							},
+							propertyName: {
+								mode: 0,
+								value: Value{
+									kind:  valueString,
+									value: "includes",
+								},
+							},
+						},
+						propertyOrder: []string{
+							propertyLength,
+							propertyName,
+						},
+						value: nativeFunctionObject{
+							name: "includes",
+							call: builtinStringIncludes,
+						},
+					},
+				},
+			},
+			"endsWith": {
+				mode: 0o101,
+				value: Value{
+					kind: valueObject,
+					value: &object{
+						runtime:     rt,
+						class:       classFunctionName,
+						objectClass: classObject,
+						prototype:   rt.global.FunctionPrototype,
+						extensible:  true,
+						property: map[string]property{
+							propertyLength: {
+								mode: 0,
+								value: Value{
+									kind:  valueNumber,
+									value: 1,
+								},
+							},
+							propertyName: {
+								mode: 0,
+								value: Value{
+									kind:  valueString,
+									value: "endsWith",
+								},
+							},
+						},
+						propertyOrder: []string{
+							propertyLength,
+							propertyName,
+						},
+						value: nativeFunctionObject{
+							name: "endsWith",
+							call: builtinStringEndsWith,
+						},
+					},
+				},
+			},
+			"repeat": {
+				mode: 0o101,
+				value: Value{
+					kind: valueObject,
+					value: &object{
+						runtime:     rt,
+						class:       classFunctionName,
+						objectClass: classObject,
+						prototype:   rt.global.FunctionPrototype,
+						extensible:  true,
+						property: map[string]property{
+							propertyLength: {
+								mode: 0,
+								value: Value{
+									kind:  valueNumber,
+									value: 1,
+								},
+							},
+							propertyName: {
+								mode: 0,
+								value: Value{
+									kind:  valueString,
+									value: "repeat",
+								},
+							},
+						},
+						propertyOrder: []string{
+							propertyLength,
+							propertyName,
+						},
+						value: nativeFunctionObject{
+							name: "repeat",
+							call: builtinStringRepeat,
+						},
+					},
+				},
+			},
+			"padStart": {
+				mode: 0o101,
+				value: Value{
+					kind: valueObject,
+					value: &object{
+						runtime:     rt,
+						class:       classFunctionName,
+						objectClass: classObject,
+						prototype:   rt.global.FunctionPrototype,
+						extensible:  true,
+						property: map[string]property{
+							propertyLength: {
+								mode: 0,
+								value: Value{
+									kind:  valueNumber,
+									value: 1,
+								},
+							},
+							propertyName: {
+								mode: 0,
+								value: Value{
+									kind:  valueString,
+									value: "padStart",
+								},
+							},
+						},
+						propertyOrder: []string{
+							propertyLength,
+							propertyName,
+						},
+						value: nativeFunctionObject{
+							name: "padStart",
+							call: builtinStringPadStart,
+						},
+					},
+				},
+			},
+			"padEnd": {
+				mode: 0o101,
+				value: Value{
+					kind: valueObject,
+					value: &object{
+						runtime:     rt,
+						class:       classFunctionName,
+						objectClass: classObject,
+						prototype:   rt.global.FunctionPrototype,
+						extensible:  true,
+						property: map[string]property{
+							propertyLength: {
+								mode: 0,
+								value: Value{
+									kind:  valueNumber,
+									value: 1,
+								},
+							},
+							propertyName: {
+								mode: 0,
+								value: Value{
+									kind:  valueString,
+									value: "padEnd",
+								},
+							},
+						},
+						propertyOrder: []string{
+							propertyLength,
+							propertyName,
+						},
+						value: nativeFunctionObject{
+							name: "padEnd",
+							call: builtinStringPadEnd,
+						},
+					},
+				},
+			},
+			"at": {
+				mode: 0o101,
+				value: Value{
+					kind: valueObject,
+					value: &object{
+						runtime:     rt,
+						class:       classFunctionName,
+						objectClass: classObject,
+						prototype:   rt.global.FunctionPrototype,
+						extensible:  true,
+						property: map[string]property{
+							propertyLength: {
+								mode: 0,
+								value: Value{
+									kind:  valueNumber,
+									value: 1,
+								},
+							},
+							propertyName: {
+								mode: 0,
+								value: Value{
+									kind:  valueString,
+									value: "at",
+								},
+							},
+						},
+						propertyOrder: []string{
+							propertyLength,
+							propertyName,
+						},
+						value: nativeFunctionObject{
+							name: "at",
+							call: builtinStringAt,
+						},
+					},
+				},
+			},
+			"replaceAll": {
+				mode: 0o101,
+				value: Value{
+					kind: valueObject,
+					value: &object{
+						runtime:     rt,
+						class:       classFunctionName,
+						objectClass: classObject,
+						prototype:   rt.global.FunctionPrototype,
+						extensible:  true,
+						property: map[string]property{
+							propertyLength: {
+								mode: 0,
+								value: Value{
+									kind:  valueNumber,
+									value: 2,
+								},
+							},
+							propertyName: {
+								mode: 0,
+								value: Value{
+									kind:  valueString,
+									value: "replaceAll",
+								},
+							},
+						},
+						propertyOrder: []string{
+							propertyLength,
+							propertyName,
+						},
+						value: nativeFunctionObject{
+							name: "replaceAll",
+							call: builtinStringReplaceAll,
+						},
+					},
+				},
+			},
 			methodToString: {
 				mode: 0o101,
 				value: Value{
@@ -2948,6 +3207,13 @@ func (rt *runtime) newContext() {
 			"substr",
 			"substring",
 			"startsWith",
+			"includes",
+			"endsWith",
+			"repeat",
+			"padStart",
+			"padEnd",
+			"at",
+			"replaceAll",
 			methodToString,
 			"trim",
 			"trimLeft",
