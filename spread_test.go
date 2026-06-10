@@ -54,3 +54,33 @@ func TestSpreadArrayLiteral(t *testing.T) {
         `, "x,y")
 	})
 }
+
+func TestSpreadNewExpression(t *testing.T) {
+	tt(t, func() {
+		test, _ := test()
+
+		test(`
+            function Point(x, y) { this.x = x; this.y = y; }
+            var p = new Point(...[1, 2]);
+            p.x + "," + p.y;
+        `, "1,2")
+
+		// Spread mixed with fixed arguments.
+		test(`
+            function T(a, b, c) { this.s = [a, b, c].join(","); }
+            new T(1, ...[2, 3]).s;
+        `, "1,2,3")
+
+		// Spread into a built-in constructor.
+		test(`new Array(...[1, 2, 3]).join(",");`, "1,2,3")
+
+		// Spreading a non-iterable into new throws a TypeError.
+		test(`
+            try {
+                new Date(...5);
+            } catch (e) {
+                e instanceof TypeError;
+            }
+        `, true)
+	})
+}

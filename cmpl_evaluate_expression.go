@@ -374,10 +374,7 @@ func (rt *runtime) cmplEvaluateNodeDotExpression(node *nodeDotExpression) Value 
 func (rt *runtime) cmplEvaluateNodeNewExpression(node *nodeNewExpression) Value {
 	callee := rt.cmplEvaluateNodeExpression(node.callee)
 
-	argumentList := []Value{}
-	for _, argumentNode := range node.argumentList {
-		argumentList = append(argumentList, rt.cmplEvaluateNodeExpression(argumentNode).resolve())
-	}
+	argumentList := rt.evaluateArgumentList(node.argumentList)
 
 	var name string
 	if rf := callee.reference(); rf != nil {
