@@ -129,6 +129,51 @@ func TestForOfControlFlow(t *testing.T) {
 	})
 }
 
+func TestForOfLabelledControlFlow(t *testing.T) {
+	tt(t, func() {
+		test, _ := test()
+
+		// continue targeting a label on a for-of loop.
+		test(`
+            var out = [];
+            outer: for (var a of [1, 2]) {
+                for (var b of [10, 20]) {
+                    if (b === 20) continue outer;
+                    out.push(a + ":" + b);
+                }
+                out.push("unreachable");
+            }
+            out.push("after");
+            out.join(",");
+        `, "1:10,2:10,after")
+
+		// break targeting a label on a for-of loop.
+		test(`
+            var out = [];
+            outer: for (var a of [1, 2]) {
+                for (var b of [10, 20]) {
+                    out.push(a + ":" + b);
+                    if (a === 1 && b === 10) break outer;
+                }
+            }
+            out.push("after");
+            out.join(",");
+        `, "1:10,after")
+
+		// A labelled for-of nested inside another for-of.
+		test(`
+            var out = [];
+            for (var a of [1, 2]) {
+                inner: for (var b of [10, 20]) {
+                    if (b === 10) continue inner;
+                    out.push(a + ":" + b);
+                }
+            }
+            out.join(",");
+        `, "1:20,2:20")
+	})
+}
+
 func TestForOfPerIteration(t *testing.T) {
 	tt(t, func() {
 		test, _ := test()

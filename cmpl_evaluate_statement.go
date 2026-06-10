@@ -335,12 +335,15 @@ func (rt *runtime) declareLexicalBinding(name string, value Value, immutable boo
 }
 
 func (rt *runtime) cmplEvaluateNodeForInStatement(node *nodeForInStatement) Value {
-	labels := append(rt.labels, "") //nolint:gocritic
-	rt.labels = nil
-
+	// Delegate before consuming rt.labels: cmplEvaluateNodeForOfStatement
+	// builds its own label set, and clearing the stack here would lose any
+	// labels attached to the loop.
 	if node.of {
 		return rt.cmplEvaluateNodeForOfStatement(node)
 	}
+
+	labels := append(rt.labels, "") //nolint:gocritic
+	rt.labels = nil
 
 	source := rt.cmplEvaluateNodeExpression(node.source)
 	sourceValue := source.resolve()
